@@ -12,6 +12,7 @@ The project is intentionally small:
 - `public/index.html`: single-page publisher/viewer test UI
 - `Dockerfile` and `docker-compose.yml`: local container runtime
 - `INTEGRATION_DESIGN.md`: how to integrate this approach into an existing frontend and BFF
+- `COTURN_DOCKER_DEPLOYMENT.md`: how to deploy a Docker-based coturn server for this project
 
 Docs:
 
@@ -19,6 +20,9 @@ Docs:
 - [中文 README](./README.zh-CN.md)
 - [English integration design](./INTEGRATION_DESIGN.md)
 - [中文集成设计](./INTEGRATION_DESIGN.zh-CN.md)
+- [coturn Docker deployment](./COTURN_DOCKER_DEPLOYMENT.md)
+- [coturn Docker 部署文档](./COTURN_DOCKER_DEPLOYMENT.zh-CN.md)
+- [coturn Docker 执行手册（中文）](./COTURN_DOCKER_RUNBOOK.zh-CN.md)
 
 License: MIT
 

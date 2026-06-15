@@ -198,6 +198,9 @@ https://your-device.your-tailnet.ts.net
 
 - [英文版集成设计文档](./INTEGRATION_DESIGN.md)
 - [中文版集成设计文档](./INTEGRATION_DESIGN.zh-CN.md)
+- [英文版 coturn Docker 部署文档](./COTURN_DOCKER_DEPLOYMENT.md)
+- [中文版 coturn Docker 部署文档](./COTURN_DOCKER_DEPLOYMENT.zh-CN.md)
+- [中文版 coturn Docker 执行手册](./COTURN_DOCKER_RUNBOOK.zh-CN.md)
 
 ## 发布说明
 
