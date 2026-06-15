@@ -1,0 +1,8 @@
+node_modules
+npm-debug.log
+.DS_Store
+.env
+frp_*.tar.gz
+webrtc-direct-probe/node_modules
+webrtc-direct-probe/
+tailscale-webrtc-stream-read-management-spec.md

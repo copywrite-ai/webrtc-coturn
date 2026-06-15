@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebRTC Relay Verify</title>
+    <style>
+      :root {
+        --bg: #f3efe5;
+        --card: rgba(255, 252, 245, 0.92);
+        --line: rgba(58, 44, 24, 0.14);
+        --text: #2a2316;
+        --muted: #6e6251;
+        --accent: #b44f2a;
+        --accent-strong: #8f3615;
+        --good: #1f7a4f;
+        --warn: #9a6a08;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "SF Pro Display", "PingFang SC", "Hiragino Sans GB", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(180, 79, 42, 0.18), transparent 28%),
+          radial-gradient(circle at top right, rgba(28, 106, 128, 0.12), transparent 24%),
+          linear-gradient(180deg, #f8f5ee 0%, var(--bg) 100%);
+        min-height: 100vh;
+      }
+
+      .wrap {
+        width: min(1180px, calc(100% - 24px));
+        margin: 24px auto 40px;
+      }
+
+      .hero {
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(248, 242, 231, 0.88));
+        box-shadow: 0 20px 50px rgba(41, 31, 19, 0.08);
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(28px, 5vw, 48px);
+        line-height: 1.02;
+        letter-spacing: -0.04em;
+      }
+
+      .sub {
+        margin: 0;
+        color: var(--muted);
+        max-width: 780px;
+        line-height: 1.6;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background: var(--card);
+        padding: 18px;
+        box-shadow: 0 14px 34px rgba(34, 24, 14, 0.06);
+        backdrop-filter: blur(10px);
+      }
+
+      .panel h2 {
+        margin: 0 0 14px;
+        font-size: 17px;
+      }
+
+      .stack { display: grid; gap: 12px; }
+      .row {
+        display: grid;
+        gap: 10px;
+      }
+
+      .row.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      input, select, textarea, button {
+        font: inherit;
+      }
+
+      input, select, textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid rgba(63, 49, 27, 0.12);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.92);
+        color: var(--text);
+      }
+
+      textarea {
+        min-height: 72px;
+        resize: vertical;
+      }
+
+      .checks {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        border-radius: 16px;
+        background: rgba(180, 79, 42, 0.05);
+      }
+
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text);
+        font-size: 14px;
+      }
+
+      .check input {
+        width: 16px;
+        height: 16px;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 14px;
+        padding: 11px 14px;
+        background: #e8ded1;
+        color: var(--text);
+        cursor: pointer;
+        transition: transform 140ms ease, background 140ms ease;
+      }
+
+      button.primary {
+        background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+        color: white;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+      }
+
+      .hint {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .viewer {
+        display: grid;
+        gap: 16px;
+      }
+
+      .status {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .stat {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 12px;
+        background: rgba(255,255,255,0.7);
+      }
+
+      .stat .k {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .stat .v {
+        margin-top: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        word-break: break-word;
+      }
+
+      .media {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .video-card {
+        position: relative;
+        overflow: hidden;
+        border-radius: 18px;
+        background: #17130d;
+        border: 1px solid rgba(255,255,255,0.06);
+        min-height: 260px;
+      }
+
+      video {
+        width: 100%;
+        height: 100%;
+        min-height: 260px;
+        object-fit: cover;
+        display: block;
+        background: #0c0c0c;
+      }
+
+      .video-card .tag {
+        position: absolute;
+        left: 12px;
+        top: 12px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.55);
+        color: white;
+        font-size: 12px;
+      }
+
+      .log {
+        min-height: 220px;
+        max-height: 320px;
+        overflow: auto;
+        white-space: pre-wrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        padding: 14px;
+        border-radius: 18px;
+        background: #1a160f;
+        color: #f5ebdc;
+      }
+
+      .ok { color: var(--good); }
+      .warn { color: var(--warn); }
+
+      @media (max-width: 920px) {
+        .grid, .media, .status, .actions, .row.two {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="hero">
+        <h1>WebRTC / TURN 验证台</h1>
+        <p class="sub">
+          这个页面用于验证你的公网 `coturn` 是否真的参与了媒体转发。推荐做法是：
+          mac 端选“推流端”，手机端选“观看端”，打开“强制 relay”，只保留 TURN 地址，然后观察最终候选是否显示为 `relay`。
+        </p>
+      </section>
+
+      <section class="grid">
+        <aside class="panel stack">
+          <div>
+            <h2>会话控制</h2>
+            <div class="row two">
+              <label>
+                房间
+                <input id="roomId" value="demo-room" />
+              </label>
+              <label>
+                角色
+                <select id="role">
+                  <option value="publisher">推流端（mac）</option>
+                  <option value="viewer">观看端（手机）</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <h2>媒体与链路</h2>
+            <div class="row two">
+              <label>
+                采集源
+                <select id="mediaSource">
+                  <option value="camera">摄像头 + 麦克风</option>
+                  <option value="screen">屏幕共享 + 麦克风</option>
+                </select>
+              </label>
+              <label>
+                视频上限 kbps
+                <input id="videoBitrate" type="number" min="80" step="20" value="280" />
+              </label>
+            </div>
+            <div class="row two">
+              <label>
+                最大帧率
+                <input id="frameRate" type="number" min="5" max="30" value="12" />
+              </label>
+              <label>
+                分辨率高度
+                <input id="videoHeight" type="number" min="180" max="1080" value="360" />
+              </label>
+            </div>
+            <div class="checks">
+              <label class="check"><input id="forceRelay" type="checkbox" checked /> 强制 `iceTransportPolicy = relay`</label>
+              <label class="check"><input id="turnOnly" type="checkbox" checked /> 只使用 TURN，不带公共 STUN</label>
+              <label class="check"><input id="autoStart" type="checkbox" checked /> 加入房间后自动发起/应答</label>
+            </div>
+          </div>
+
+          <div>
+            <h2>TURN 配置</h2>
+            <div class="row">
+              <label>
+                URL 列表（每行一个）
+                <textarea id="iceUrls" placeholder="turn:turn.example.com:3478?transport=udp&#10;turn:turn.example.com:3478?transport=tcp"></textarea>
+              </label>
+            </div>
+            <div class="row two">
+              <label>
+                Username
+                <input id="turnUsername" placeholder="temporary-username" />
+              </label>
+              <label>
+                Credential
+                <input id="turnCredential" placeholder="temporary-credential" />
+              </label>
+            </div>
+            <p class="hint">
+              你现在服务器带宽只有 1 Mbps，先把码率维持在 `200-400 kbps`，否则测出来的失败可能只是带宽跑满。
+            </p>
+          </div>
+
+          <div class="actions">
+            <button class="primary" id="joinBtn">加入房间</button>
+            <button class="primary" id="callBtn">开始连接</button>
+            <button id="copyBtn">复制分享链接</button>
+            <button id="resetBtn">重置连接</button>
+          </div>
+        </aside>
+
+        <main class="viewer">
+          <section class="status">
+            <div class="stat">
+              <div class="k">信令</div>
+              <div class="v" id="wsState">connecting</div>
+            </div>
+            <div class="stat">
+              <div class="k">ICE 状态</div>
+              <div class="v" id="iceState">idle</div>
+            </div>
+            <div class="stat">
+              <div class="k">候选对</div>
+              <div class="v" id="candidateState">unknown</div>
+            </div>
+            <div class="stat">
+              <div class="k">对端</div>
+              <div class="v" id="peerState">waiting</div>
+            </div>
+          </section>
+
+          <section class="media">
+            <div class="video-card">
+              <span class="tag">本地</span>
+              <video id="localVideo" autoplay playsinline muted></video>
+            </div>
+            <div class="video-card">
+              <span class="tag">远端</span>
+              <video id="remoteVideo" autoplay playsinline></video>
+            </div>
+          </section>
+
+          <section class="panel">
+            <h2>事件日志</h2>
+            <div class="log" id="log"></div>
+          </section>
+        </main>
+      </section>
+    </div>
+
+    <script src="/config.js"></script>
+    <script>
+      const appConfig = window.APP_CONFIG || {};
+      const peerId = crypto.randomUUID();
+      const logEl = document.getElementById('log');
+      const localVideo = document.getElementById('localVideo');
+      const remoteVideo = document.getElementById('remoteVideo');
+      const roomInput = document.getElementById('roomId');
+      const roleInput = document.getElementById('role');
+      const mediaSourceInput = document.getElementById('mediaSource');
+      const videoBitrateInput = document.getElementById('videoBitrate');
+      const frameRateInput = document.getElementById('frameRate');
+      const videoHeightInput = document.getElementById('videoHeight');
+      const forceRelayInput = document.getElementById('forceRelay');
+      const turnOnlyInput = document.getElementById('turnOnly');
+      const autoStartInput = document.getElementById('autoStart');
+      const iceUrlsInput = document.getElementById('iceUrls');
+      const turnUsernameInput = document.getElementById('turnUsername');
+      const turnCredentialInput = document.getElementById('turnCredential');
+      const joinBtn = document.getElementById('joinBtn');
+      const callBtn = document.getElementById('callBtn');
+      const copyBtn = document.getElementById('copyBtn');
+      const resetBtn = document.getElementById('resetBtn');
+      const wsStateEl = document.getElementById('wsState');
+      const iceStateEl = document.getElementById('iceState');
+      const candidateStateEl = document.getElementById('candidateState');
+      const peerStateEl = document.getElementById('peerState');
+
+      let ws;
+      let pc = null;
+      let localStream = null;
+      let roomId = null;
+      let joined = false;
+      let peers = [];
+      let activePeerId = null;
+      let pollingStats = null;
+      let tracksAdded = false;
+
+      const params = new URLSearchParams(location.search);
+      const roleLocked = params.has('role');
+      roomInput.value = appConfig.defaultRoom || 'demo-room';
+      iceUrlsInput.value = (appConfig.defaultTurnUrls || []).join('\n');
+      turnUsernameInput.value = appConfig.defaultTurnUsername || '';
+      turnCredentialInput.value = appConfig.defaultTurnCredential || '';
+      forceRelayInput.checked = Boolean(appConfig.defaultForceRelay);
+      turnOnlyInput.checked = Boolean(appConfig.defaultTurnOnly);
+      autoStartInput.checked = Boolean(appConfig.defaultAutoStart);
+
+      if (params.get('room')) roomInput.value = params.get('room');
+      if (params.get('role')) roleInput.value = params.get('role');
+      if (params.get('relay') === '0') forceRelayInput.checked = false;
+      if (params.get('relay') === '1') forceRelayInput.checked = true;
+      if (params.get('turnOnly') === '0') turnOnlyInput.checked = false;
+      if (params.get('turnOnly') === '1') turnOnlyInput.checked = true;
+
+      if (roleLocked) {
+        roleInput.disabled = true;
+      }
+
+      function setText(el, value) {
+        el.textContent = value;
+      }
+
+      function log(msg) {
+        const line = `${new Date().toISOString()} ${msg}`;
+        logEl.textContent += `${line}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+        console.log(line);
+      }
+
+      function parseIceServers() {
+        const urls = iceUrlsInput.value
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean);
+
+        const servers = [];
+        if (!turnOnlyInput.checked) {
+          servers.push(
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+          );
+        }
+        if (urls.length) {
+          servers.push({
+            urls,
+            username: turnUsernameInput.value.trim(),
+            credential: turnCredentialInput.value.trim(),
+          });
+        }
+        return servers;
+      }
+
+      function isViewerRole() {
+        return roleInput.value === 'viewer';
+      }
+
+      function syncRoleUi() {
+        const viewer = isViewerRole();
+        mediaSourceInput.disabled = viewer;
+        videoBitrateInput.disabled = viewer;
+        frameRateInput.disabled = viewer;
+        videoHeightInput.disabled = viewer;
+        callBtn.disabled = viewer;
+        if (viewer) {
+          localVideo.srcObject = null;
+          log('viewer mode active: local capture and manual call disabled');
+        } else {
+          log('publisher mode active');
+        }
+      }
+
+      async function ensureMedia() {
+        if (isViewerRole()) {
+          log('viewer role: skip local capture');
+          return null;
+        }
+        if (localStream) return localStream;
+
+        const frameRate = Number(frameRateInput.value || 12);
+        const height = Number(videoHeightInput.value || 360);
+        const audio = true;
+        const video = {
+          frameRate: { ideal: frameRate, max: frameRate },
+          height: { ideal: height, max: height },
+          width: { ideal: Math.round(height * 16 / 9) },
+        };
+
+        if (mediaSourceInput.value === 'screen') {
+          localStream = await navigator.mediaDevices.getDisplayMedia({ video, audio });
+        } else {
+          localStream = await navigator.mediaDevices.getUserMedia({ video, audio });
+        }
+        localVideo.srcObject = localStream;
+        log(`local media ready source=${mediaSourceInput.value}`);
+        return localStream;
+      }
+
+      async function applySenderParams() {
+        if (!pc) return;
+        const sender = pc.getSenders().find((item) => item.track?.kind === 'video');
+        if (!sender || !sender.getParameters) return;
+        const params = sender.getParameters();
+        if (!params.encodings || !params.encodings.length) {
+          params.encodings = [{}];
+        }
+        params.encodings[0].maxBitrate = Number(videoBitrateInput.value || 280) * 1000;
+        params.encodings[0].maxFramerate = Number(frameRateInput.value || 12);
+        try {
+          await sender.setParameters(params);
+          log(`sender params maxBitrate=${params.encodings[0].maxBitrate}`);
+        } catch (err) {
+          log(`setParameters failed: ${err.message}`);
+        }
+      }
+
+      function stopStatsPolling() {
+        if (pollingStats) {
+          clearInterval(pollingStats);
+          pollingStats = null;
+        }
+      }
+
+      async function updateSelectedCandidatePair() {
+        if (!pc) return;
+        const stats = await pc.getStats();
+        let selectedPair = null;
+        stats.forEach((report) => {
+          if (report.type === 'candidate-pair' && report.nominated && report.state === 'succeeded') {
+            selectedPair = report;
+          }
+        });
+        if (!selectedPair) return;
+
+        const localCandidate = stats.get(selectedPair.localCandidateId);
+        const remoteCandidate = stats.get(selectedPair.remoteCandidateId);
+        const localType = localCandidate?.candidateType || '-';
+        const remoteType = remoteCandidate?.candidateType || '-';
+        const protocol = localCandidate?.protocol || remoteCandidate?.protocol || '-';
+        const relay = localType === 'relay' || remoteType === 'relay';
+        const summary = `${relay ? 'relay' : 'direct'} / ${protocol} / ${localType}->${remoteType}`;
+        setText(candidateStateEl, summary);
+      }
+
+      function startStatsPolling() {
+        stopStatsPolling();
+        pollingStats = setInterval(() => {
+          updateSelectedCandidatePair().catch((err) => log(`stats failed: ${err.message}`));
+        }, 1500);
+      }
+
+      function resetPeerConnection() {
+        stopStatsPolling();
+        tracksAdded = false;
+        activePeerId = null;
+        if (pc) {
+          pc.onicecandidate = null;
+          pc.ontrack = null;
+          pc.oniceconnectionstatechange = null;
+          pc.onconnectionstatechange = null;
+          pc.close();
+          pc = null;
+        }
+        remoteVideo.srcObject = null;
+        setText(iceStateEl, 'idle');
+        setText(candidateStateEl, 'unknown');
+        setText(peerStateEl, peers[0] || 'waiting');
+      }
+
+      async function attachLocalTracks() {
+        if (tracksAdded || isViewerRole()) return;
+        const stream = await ensureMedia();
+        if (!stream) return;
+        for (const track of stream.getTracks()) {
+          pc.addTrack(track, stream);
+        }
+        tracksAdded = true;
+        await applySenderParams();
+      }
+
+      function ensurePeerConnection() {
+        if (pc) return pc;
+        pc = new RTCPeerConnection({
+          iceServers: parseIceServers(),
+          iceTransportPolicy: forceRelayInput.checked ? 'relay' : 'all',
+        });
+
+        pc.onicecandidate = (event) => {
+          if (!event.candidate || !activePeerId) return;
+          ws.send(JSON.stringify({
+            type: 'signal',
+            to: activePeerId,
+            data: { candidate: event.candidate },
+          }));
+        };
+
+        pc.ontrack = (event) => {
+          remoteVideo.srcObject = event.streams[0];
+          log('remote track received');
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          setText(iceStateEl, pc.iceConnectionState);
+          log(`iceConnectionState=${pc.iceConnectionState}`);
+        };
+
+        pc.onconnectionstatechange = () => {
+          log(`connectionState=${pc.connectionState}`);
+        };
+
+        startStatsPolling();
+        return pc;
+      }
+
+      async function makeOffer() {
+        if (!joined) {
+          log('join room first');
+          return;
+        }
+        if (isViewerRole()) {
+          log('viewer role cannot start calls');
+          return;
+        }
+        if (!peers.length) {
+          log('no peer in room');
+          return;
+        }
+        activePeerId = peers[0];
+        setText(peerStateEl, activePeerId);
+        const conn = ensurePeerConnection();
+        await attachLocalTracks();
+        const offer = await conn.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true,
+        });
+        await conn.setLocalDescription(offer);
+        ws.send(JSON.stringify({
+          type: 'signal',
+          to: activePeerId,
+          data: { offer },
+        }));
+        log(`offer sent to ${activePeerId}`);
+      }
+
+      function buildShareUrl() {
+        const url = new URL(location.href);
+        url.searchParams.set('room', roomInput.value.trim() || 'demo-room');
+        url.searchParams.set('role', roleInput.value === 'publisher' ? 'viewer' : 'publisher');
+        url.searchParams.set('relay', forceRelayInput.checked ? '1' : '0');
+        url.searchParams.set('turnOnly', turnOnlyInput.checked ? '1' : '0');
+        return url.toString();
+      }
+
+      function connectSignal() {
+        ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/signal`);
+        wsStateEl.textContent = 'connecting';
+
+        ws.onopen = () => {
+          setText(wsStateEl, 'open');
+          log('signal connected');
+        };
+
+        ws.onclose = () => {
+          setText(wsStateEl, 'closed');
+          log('signal closed');
+        };
+
+        ws.onerror = () => {
+          setText(wsStateEl, 'error');
+          log('signal error');
+        };
+
+        ws.onmessage = async (event) => {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'joined') {
+            joined = true;
+            roomId = msg.roomId;
+            log(`joined room=${msg.roomId} peerId=${msg.peerId}`);
+            if (!isViewerRole()) {
+              await ensureMedia();
+            }
+            return;
+          }
+
+          if (msg.type === 'peers') {
+            peers = msg.peers.filter((id) => id !== peerId);
+            setText(peerStateEl, peers[0] || 'waiting');
+            log(`peers=${JSON.stringify(peers)}`);
+            if (autoStartInput.checked && !isViewerRole() && peers.length && joined) {
+              await makeOffer();
+            }
+            return;
+          }
+
+          if (msg.type !== 'signal') return;
+
+          activePeerId = msg.from;
+          setText(peerStateEl, activePeerId);
+          const conn = ensurePeerConnection();
+          await attachLocalTracks();
+
+          if (msg.data.offer) {
+            await conn.setRemoteDescription(msg.data.offer);
+            const answer = await conn.createAnswer();
+            await conn.setLocalDescription(answer);
+            ws.send(JSON.stringify({
+              type: 'signal',
+              to: msg.from,
+              data: { answer },
+            }));
+            log(`answer sent to ${msg.from}`);
+          } else if (msg.data.answer) {
+            await conn.setRemoteDescription(msg.data.answer);
+            log(`answer applied from ${msg.from}`);
+          } else if (msg.data.candidate) {
+            await conn.addIceCandidate(msg.data.candidate);
+          }
+        };
+      }
+
+      joinBtn.onclick = async () => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          log('signal not ready');
+          return;
+        }
+        roomId = roomInput.value.trim() || 'demo-room';
+        ws.send(JSON.stringify({ type: 'join', roomId, peerId }));
+      };
+
+      callBtn.onclick = async () => {
+        await makeOffer();
+      };
+
+      copyBtn.onclick = async () => {
+        const url = buildShareUrl();
+        await navigator.clipboard.writeText(url);
+        log(`share url copied: ${url}`);
+      };
+
+      resetBtn.onclick = () => {
+        resetPeerConnection();
+        log('peer connection reset');
+      };
+
+      roleInput.onchange = () => {
+        syncRoleUi();
+      };
+
+      syncRoleUi();
+      connectSignal();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "webrtc-turn-relay-lab",
+  "version": "1.0.0",
+  "private": false,
+  "description": "Minimal WebRTC publisher/viewer demo for validating TURN relay fallback with coturn and tailnet access.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}
