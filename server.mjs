@@ -29,7 +29,10 @@ const server = createServer(async (req, res) => {
   try {
     const requestUrl = new URL(req.url || '/', 'http://localhost');
     if (requestUrl.pathname === '/config.js') {
-      res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' });
+      res.writeHead(200, {
+        'Content-Type': 'text/javascript; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
       res.end(`window.APP_CONFIG = ${JSON.stringify(APP_CONFIG, null, 2)};\n`);
       return;
     }

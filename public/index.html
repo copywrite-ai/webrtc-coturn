@@ -317,10 +317,24 @@
 
           <div>
             <h2>TURN 配置</h2>
+            <div class="row two">
+              <label>
+                TURN 预设
+                <select id="turnPreset">
+                  <option value="ip">turn.openrobot-rd.com</option>
+                  <option value="domain">turn.mynanocloud.com</option>
+                  <option value="custom">自定义</option>
+                </select>
+              </label>
+              <label>
+                配置操作
+                <button id="reloadConfigBtn" type="button">重新加载配置</button>
+              </label>
+            </div>
             <div class="row">
               <label>
                 URL 列表（每行一个）
-                <textarea id="iceUrls" placeholder="turn:turn.example.com:3478?transport=udp&#10;turn:turn.example.com:3478?transport=tcp"></textarea>
+                <textarea id="iceUrls" placeholder="turn:turn.openrobot-rd.com:3478?transport=udp&#10;turn:turn.openrobot-rd.com:3478?transport=tcp"></textarea>
               </label>
             </div>
             <div class="row two">
@@ -401,6 +415,8 @@
       const forceRelayInput = document.getElementById('forceRelay');
       const turnOnlyInput = document.getElementById('turnOnly');
       const autoStartInput = document.getElementById('autoStart');
+      const turnPresetInput = document.getElementById('turnPreset');
+      const reloadConfigBtn = document.getElementById('reloadConfigBtn');
       const iceUrlsInput = document.getElementById('iceUrls');
       const turnUsernameInput = document.getElementById('turnUsername');
       const turnCredentialInput = document.getElementById('turnCredential');
@@ -423,15 +439,27 @@
       let pollingStats = null;
       let tracksAdded = false;
 
+      const turnPresets = {
+        ip: [
+          'turn:turn.openrobot-rd.com:3478?transport=udp',
+          'turn:turn.openrobot-rd.com:3478?transport=tcp',
+        ],
+        domain: [
+          'turn:turn.mynanocloud.com:3480?transport=udp',
+          'turn:turn.mynanocloud.com:3480?transport=tcp',
+        ],
+      };
+
+      let runtimeConfig = { ...appConfig };
       const params = new URLSearchParams(location.search);
       const roleLocked = params.has('role');
-      roomInput.value = appConfig.defaultRoom || 'demo-room';
-      iceUrlsInput.value = (appConfig.defaultTurnUrls || []).join('\n');
-      turnUsernameInput.value = appConfig.defaultTurnUsername || '';
-      turnCredentialInput.value = appConfig.defaultTurnCredential || '';
-      forceRelayInput.checked = Boolean(appConfig.defaultForceRelay);
-      turnOnlyInput.checked = Boolean(appConfig.defaultTurnOnly);
-      autoStartInput.checked = Boolean(appConfig.defaultAutoStart);
+      roomInput.value = runtimeConfig.defaultRoom || 'demo-room';
+      iceUrlsInput.value = (runtimeConfig.defaultTurnUrls || []).join('\n');
+      turnUsernameInput.value = runtimeConfig.defaultTurnUsername || '';
+      turnCredentialInput.value = runtimeConfig.defaultTurnCredential || '';
+      forceRelayInput.checked = Boolean(runtimeConfig.defaultForceRelay);
+      turnOnlyInput.checked = Boolean(runtimeConfig.defaultTurnOnly);
+      autoStartInput.checked = Boolean(runtimeConfig.defaultAutoStart);
 
       if (params.get('room')) roomInput.value = params.get('room');
       if (params.get('role')) roleInput.value = params.get('role');
@@ -444,6 +472,25 @@
         roleInput.disabled = true;
       }
 
+      function getSelectedTurnPreset(urlsText) {
+        const normalized = urlsText
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .join('\n');
+        for (const [preset, urls] of Object.entries(turnPresets)) {
+          if (normalized === urls.join('\n')) {
+            return preset;
+          }
+        }
+        return 'custom';
+      }
+
+      function applyTurnPreset(preset) {
+        if (preset === 'custom') return;
+        iceUrlsInput.value = turnPresets[preset].join('\n');
+      }
+
       function setText(el, value) {
         el.textContent = value;
       }
@@ -453,6 +500,24 @@
         logEl.textContent += `${line}\n`;
         logEl.scrollTop = logEl.scrollHeight;
         console.log(line);
+      }
+
+      async function reloadRuntimeConfig() {
+        const response = await fetch(`/config.js?t=${Date.now()}`, { cache: 'no-store' });
+        const source = await response.text();
+        const nextWindow = {};
+        new Function('window', source)(nextWindow);
+        runtimeConfig = { ...(nextWindow.APP_CONFIG || {}) };
+        roomInput.value = runtimeConfig.defaultRoom || roomInput.value || 'demo-room';
+        iceUrlsInput.value = (runtimeConfig.defaultTurnUrls || []).join('\n');
+        turnUsernameInput.value = runtimeConfig.defaultTurnUsername || '';
+        turnCredentialInput.value = runtimeConfig.defaultTurnCredential || '';
+        forceRelayInput.checked = Boolean(runtimeConfig.defaultForceRelay);
+        turnOnlyInput.checked = Boolean(runtimeConfig.defaultTurnOnly);
+        autoStartInput.checked = Boolean(runtimeConfig.defaultAutoStart);
+        turnPresetInput.value = getSelectedTurnPreset(iceUrlsInput.value);
+        syncTurnPresetUi();
+        log('runtime config reloaded from /config.js');
       }
 
       function parseIceServers() {
@@ -495,6 +560,11 @@
         } else {
           log('publisher mode active');
         }
+      }
+
+      function syncTurnPresetUi() {
+        const isCustom = turnPresetInput.value === 'custom';
+        iceUrlsInput.readOnly = !isCustom;
       }
 
       async function ensureMedia() {
@@ -773,6 +843,26 @@
         syncRoleUi();
       };
 
+      turnPresetInput.onchange = () => {
+        applyTurnPreset(turnPresetInput.value);
+        syncTurnPresetUi();
+        log(`turn preset=${turnPresetInput.value}`);
+      };
+
+      reloadConfigBtn.onclick = async () => {
+        await reloadRuntimeConfig();
+      };
+
+      iceUrlsInput.addEventListener('input', () => {
+        const detected = getSelectedTurnPreset(iceUrlsInput.value);
+        if (turnPresetInput.value !== detected) {
+          turnPresetInput.value = detected;
+          syncTurnPresetUi();
+        }
+      });
+
+      turnPresetInput.value = getSelectedTurnPreset(iceUrlsInput.value);
+      syncTurnPresetUi();
       syncRoleUi();
       connectSignal();
     </script>

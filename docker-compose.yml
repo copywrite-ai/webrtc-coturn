@@ -7,7 +7,7 @@ services:
     environment:
       PORT: "${PORT:-9001}"
       DEFAULT_ROOM: "${DEFAULT_ROOM:-demo-room}"
-      DEFAULT_TURN_URLS: "${DEFAULT_TURN_URLS:-}"
+      DEFAULT_TURN_URLS: "${DEFAULT_TURN_URLS:-turn:turn.openrobot-rd.com:3478?transport=udp,turn:turn.openrobot-rd.com:3478?transport=tcp}"
       DEFAULT_TURN_USERNAME: "${DEFAULT_TURN_USERNAME:-}"
       DEFAULT_TURN_CREDENTIAL: "${DEFAULT_TURN_CREDENTIAL:-}"
       DEFAULT_FORCE_RELAY: "${DEFAULT_FORCE_RELAY:-1}"
