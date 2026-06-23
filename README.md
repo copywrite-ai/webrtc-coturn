@@ -10,6 +10,8 @@ The project is intentionally small:
 
 - `server.mjs`: static file server + WebSocket signaling
 - `public/index.html`: single-page publisher/viewer test UI
+- `public/whip-publisher.html`: minimal WHIP ingest page
+- `public/whep-player.html`: minimal WHEP playback page
 - `Dockerfile` and `docker-compose.yml`: local container runtime
 - `INTEGRATION_DESIGN.md`: how to integrate this approach into an existing frontend and BFF
 - `COTURN_DOCKER_DEPLOYMENT.md`: how to deploy a Docker-based coturn server for this project
@@ -90,6 +92,12 @@ Supported variables:
 - `DEFAULT_TURN_URLS`: comma-separated TURN URLs
 - `DEFAULT_TURN_USERNAME`: optional prefilled TURN username
 - `DEFAULT_TURN_CREDENTIAL`: optional prefilled TURN credential
+- `DEFAULT_SERVER_BANDWIDTH_MBPS`: total relay server bandwidth used for rough capacity estimation
+- `TURN_SHARED_SECRET`: shared secret for dynamic temporary TURN credentials
+- `TURN_TTL_SECONDS`: lifetime in seconds for generated TURN usernames
+- `TURN_USERNAME_SUFFIX`: suffix used in generated usernames, e.g. `timestamp:client`
+- `DEFAULT_WHIP_URL`: default WHIP ingest endpoint
+- `DEFAULT_WHEP_URL`: default WHEP playback endpoint
 - `DEFAULT_FORCE_RELAY`: `1` or `0`
 - `DEFAULT_TURN_ONLY`: `1` or `0`
 - `DEFAULT_AUTO_START`: `1` or `0`
@@ -102,10 +110,44 @@ DEFAULT_ROOM=demo-room
 DEFAULT_TURN_URLS=turn:turn.example.com:3478?transport=udp,turn:turn.example.com:3478?transport=tcp
 DEFAULT_TURN_USERNAME=
 DEFAULT_TURN_CREDENTIAL=
+DEFAULT_SERVER_BANDWIDTH_MBPS=20
+DEFAULT_WHIP_URL=http://localhost:8889/demo-stream/whip
+DEFAULT_WHEP_URL=http://localhost:8889/demo-stream/whep
 DEFAULT_FORCE_RELAY=1
 DEFAULT_TURN_ONLY=1
 DEFAULT_AUTO_START=1
 ```
+
+## WHEP Media Server
+
+This branch also adds a `mediamtx` service so the project can expose a standard WHEP playback endpoint with an always-available built-in H264 stream, alongside the legacy browser-to-browser demo.
+
+Start both services:
+
+```bash
+docker compose up --build -d
+```
+
+Then open:
+
+```text
+http://localhost:9001/whep-player.html
+```
+
+Default local endpoints:
+
+```text
+http://localhost:9001/mtx/demo-stream/whep
+```
+
+Suggested local verification flow:
+
+1. Open `/whep-player.html` on another browser or device.
+2. Keep the existing TURN values if your network needs relay.
+3. Start playback directly against the built-in `demo-stream`.
+
+The page reuses TURN defaults from `/config.js`, so an existing `coturn` deployment can stay unchanged.
+The web app reverse-proxies `/mtx/*` to the local MediaMTX service, so a single Tailscale Serve entry on `9001` is enough. When MediaMTX runs with host networking, the upstream from the web container should be `http://host.docker.internal:8889`.
 
 When using Docker Compose, Compose will automatically read `.env` if it exists.
 

@@ -6,81 +6,123 @@
     <title>WebRTC Relay Verify</title>
     <style>
       :root {
-        --bg: #f3efe5;
-        --card: rgba(255, 252, 245, 0.92);
-        --line: rgba(58, 44, 24, 0.14);
-        --text: #2a2316;
-        --muted: #6e6251;
-        --accent: #b44f2a;
-        --accent-strong: #8f3615;
-        --good: #1f7a4f;
-        --warn: #9a6a08;
+        --bg: #0f141a;
+        --bg-2: #151c24;
+        --card: rgba(21, 28, 36, 0.92);
+        --card-strong: rgba(17, 23, 30, 0.98);
+        --line: rgba(158, 176, 196, 0.16);
+        --line-strong: rgba(158, 176, 196, 0.24);
+        --text: #e6edf5;
+        --muted: #93a4b8;
+        --accent: #1aa3ff;
+        --accent-strong: #0d7fd1;
+        --good: #3ccf91;
+        --warn: #ffb347;
       }
 
       * { box-sizing: border-box; }
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(124, 144, 168, 0.55) rgba(10, 15, 20, 0.72);
+      }
+      *::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+      *::-webkit-scrollbar-track {
+        background: rgba(10, 15, 20, 0.72);
+        border-radius: 999px;
+      }
+      *::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, rgba(124, 144, 168, 0.78), rgba(93, 112, 136, 0.88));
+        border-radius: 999px;
+        border: 2px solid rgba(10, 15, 20, 0.72);
+      }
+      *::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, rgba(152, 173, 198, 0.84), rgba(115, 135, 160, 0.92));
+      }
+
       body {
         margin: 0;
-        font-family: "SF Pro Display", "PingFang SC", "Hiragino Sans GB", sans-serif;
+        font-family: Inter, "SF Pro Display", "PingFang SC", "Hiragino Sans GB", sans-serif;
         color: var(--text);
         background:
-          radial-gradient(circle at top left, rgba(180, 79, 42, 0.18), transparent 28%),
-          radial-gradient(circle at top right, rgba(28, 106, 128, 0.12), transparent 24%),
-          linear-gradient(180deg, #f8f5ee 0%, var(--bg) 100%);
+          radial-gradient(circle at top left, rgba(26, 163, 255, 0.14), transparent 24%),
+          radial-gradient(circle at top right, rgba(60, 207, 145, 0.08), transparent 22%),
+          linear-gradient(180deg, #111821 0%, var(--bg) 100%);
         min-height: 100vh;
+        overflow: hidden;
       }
 
       .wrap {
-        width: min(1180px, calc(100% - 24px));
-        margin: 24px auto 40px;
+        width: calc(100% - 20px);
+        max-width: 1820px;
+        margin: 10px auto;
+        height: calc(100vh - 20px);
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 10px;
       }
 
       .hero {
-        padding: 24px;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 16px;
+        padding: 10px 14px;
         border: 1px solid var(--line);
-        border-radius: 24px;
-        background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(248, 242, 231, 0.88));
-        box-shadow: 0 20px 50px rgba(41, 31, 19, 0.08);
+        border-radius: 14px;
+        background: linear-gradient(180deg, rgba(22, 29, 37, 0.96), rgba(15, 20, 26, 0.96));
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
       }
 
       h1 {
-        margin: 0 0 10px;
-        font-size: clamp(28px, 5vw, 48px);
-        line-height: 1.02;
-        letter-spacing: -0.04em;
+        margin: 0;
+        font-size: clamp(18px, 2vw, 24px);
+        line-height: 1;
+        letter-spacing: -0.02em;
       }
 
       .sub {
         margin: 0;
         color: var(--muted);
-        max-width: 780px;
-        line-height: 1.6;
+        line-height: 1.45;
+        font-size: 12px;
       }
 
       .grid {
         display: grid;
-        grid-template-columns: 380px 1fr;
-        gap: 18px;
-        margin-top: 18px;
+        grid-template-columns: 320px minmax(0, 1fr) 380px;
+        gap: 10px;
+        align-items: stretch;
+        min-height: 0;
+        height: 100%;
       }
 
       .panel {
         border: 1px solid var(--line);
-        border-radius: 22px;
+        border-radius: 14px;
         background: var(--card);
-        padding: 18px;
-        box-shadow: 0 14px 34px rgba(34, 24, 14, 0.06);
-        backdrop-filter: blur(10px);
+        padding: 14px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+        backdrop-filter: blur(14px);
       }
 
       .panel h2 {
-        margin: 0 0 14px;
-        font-size: 17px;
+        margin: 0 0 10px;
+        font-size: 14px;
+        letter-spacing: 0.02em;
       }
 
-      .stack { display: grid; gap: 12px; }
+      .stack { display: grid; gap: 10px; }
+      .left-col {
+        min-height: 0;
+        overflow: auto;
+      }
+
       .row {
         display: grid;
-        gap: 10px;
+        gap: 8px;
       }
 
       .row.two {
@@ -89,9 +131,11 @@
 
       label {
         display: grid;
-        gap: 6px;
-        font-size: 13px;
+        gap: 4px;
+        font-size: 11px;
         color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
       }
 
       input, select, textarea, button {
@@ -100,24 +144,26 @@
 
       input, select, textarea {
         width: 100%;
-        padding: 10px 12px;
-        border: 1px solid rgba(63, 49, 27, 0.12);
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.92);
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: rgba(13, 18, 24, 0.92);
         color: var(--text);
+        font-size: 13px;
       }
 
       textarea {
-        min-height: 72px;
+        min-height: 64px;
         resize: vertical;
       }
 
       .checks {
         display: grid;
-        gap: 8px;
-        padding: 12px;
-        border-radius: 16px;
-        background: rgba(180, 79, 42, 0.05);
+        gap: 7px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--line);
       }
 
       .check {
@@ -125,7 +171,7 @@
         align-items: center;
         gap: 8px;
         color: var(--text);
-        font-size: 14px;
+        font-size: 13px;
       }
 
       .check input {
@@ -136,17 +182,22 @@
       .actions {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
+        gap: 8px;
+      }
+
+      .mobile-actions {
+        display: none;
       }
 
       button {
         border: 0;
-        border-radius: 14px;
-        padding: 11px 14px;
-        background: #e8ded1;
+        border-radius: 10px;
+        padding: 9px 12px;
+        background: #25313f;
         color: var(--text);
         cursor: pointer;
         transition: transform 140ms ease, background 140ms ease;
+        font-size: 13px;
       }
 
       button.primary {
@@ -160,27 +211,37 @@
 
       .hint {
         margin: 0;
-        font-size: 12px;
+        font-size: 11px;
         color: var(--muted);
-        line-height: 1.5;
+        line-height: 1.45;
       }
 
-      .viewer {
+      .center-col {
         display: grid;
-        gap: 16px;
+        gap: 10px;
+        min-height: 0;
+        overflow: auto;
+        align-content: start;
+      }
+
+      .log-col {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 8px;
+        min-height: 0;
       }
 
       .status {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
+        gap: 8px;
       }
 
       .stat {
         border: 1px solid var(--line);
-        border-radius: 16px;
-        padding: 12px;
-        background: rgba(255,255,255,0.7);
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: rgba(255,255,255,0.04);
       }
 
       .stat .k {
@@ -189,31 +250,56 @@
       }
 
       .stat .v {
-        margin-top: 6px;
-        font-size: 14px;
+        margin-top: 4px;
+        font-size: 13px;
         font-weight: 600;
         word-break: break-word;
+      }
+
+      .diag {
+        border: 1px solid var(--line);
+        border-left: 4px solid #66788c;
+        border-radius: 12px;
+        padding: 12px 14px;
+        background: rgba(255,255,255,0.04);
+      }
+
+      .diag[data-level="info"] { border-left-color: #8c7a5f; }
+      .diag[data-level="success"] { border-left-color: var(--good); }
+      .diag[data-level="warn"] { border-left-color: var(--warn); }
+      .diag[data-level="error"] { border-left-color: #b63a2b; }
+
+      .diag .title {
+        font-weight: 700;
+        font-size: 14px;
+      }
+
+      .diag .detail {
+        margin-top: 4px;
+        color: var(--muted);
+        line-height: 1.5;
+        font-size: 12px;
       }
 
       .media {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
+        gap: 10px;
       }
 
       .video-card {
         position: relative;
         overflow: hidden;
-        border-radius: 18px;
-        background: #17130d;
-        border: 1px solid rgba(255,255,255,0.06);
-        min-height: 260px;
+        border-radius: 14px;
+        background: #0a0f14;
+        border: 1px solid rgba(255,255,255,0.08);
+        min-height: 300px;
       }
 
       video {
         width: 100%;
         height: 100%;
-        min-height: 260px;
+        min-height: 300px;
         object-fit: cover;
         display: block;
         background: #0c0c0c;
@@ -223,33 +309,193 @@
         position: absolute;
         left: 12px;
         top: 12px;
-        padding: 6px 10px;
+        padding: 5px 9px;
         border-radius: 999px;
-        background: rgba(0, 0, 0, 0.55);
+        background: rgba(8, 11, 15, 0.72);
         color: white;
-        font-size: 12px;
+        font-size: 11px;
+        letter-spacing: 0.03em;
       }
 
       .log {
-        min-height: 220px;
-        max-height: 320px;
-        overflow: auto;
-        white-space: pre-wrap;
+        min-height: 0;
+        height: 100%;
+        overflow-x: hidden;
+        overflow-y: scroll;
+        scrollbar-gutter: stable;
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 12px;
         line-height: 1.5;
-        padding: 14px;
-        border-radius: 18px;
-        background: #1a160f;
-        color: #f5ebdc;
+        padding: 12px;
+        border-radius: 12px;
+        background: #0c1117;
+        color: #dce7f5;
+        border: 1px solid var(--line);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+      }
+
+      .log-head {
+        display: flex;
+        align-items: center;
+        min-height: 0;
+      }
+
+      .log-head h2 {
+        margin: 0;
+        font-size: 14px;
+        letter-spacing: 0.02em;
+      }
+
+      .log::after {
+        content: "";
+        position: sticky;
+        left: 0;
+        bottom: 0;
+        display: block;
+        height: 24px;
+        margin-top: -24px;
+        pointer-events: none;
+        background: linear-gradient(180deg, rgba(26, 22, 15, 0), rgba(26, 22, 15, 0.92));
+      }
+
+      .log-lines {
+        display: grid;
+        gap: 8px;
+      }
+
+      .log-group {
+        margin-top: 10px;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        padding: 9px;
+        background: rgba(255,255,255,0.025);
+      }
+
+      .log-group:first-child {
+        margin-top: 0;
+      }
+
+      .log-group h3 {
+        margin: 0 0 8px;
+        margin-bottom: 8px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #8fc8ff;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .log-line {
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid transparent;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .log-line .raw {
+        display: block;
+        color: #dbe7f4;
+      }
+
+      .log-line .explain {
+        display: block;
+        margin-top: 4px;
+        font-size: 12px;
+        line-height: 1.55;
+        padding: 6px 8px;
+        border-radius: 8px;
+        color: #f8fbff;
+        background: rgba(26, 163, 255, 0.12);
+        border: 1px solid rgba(26, 163, 255, 0.18);
+        font-weight: 600;
+      }
+
+      .log-line[data-level="warn"] {
+        background: rgba(154, 106, 8, 0.12);
+        border-color: rgba(154, 106, 8, 0.25);
+      }
+
+      .log-line[data-level="warn"] .explain {
+        background: rgba(154, 106, 8, 0.2);
+      }
+
+      .log-line[data-level="error"] {
+        background: rgba(182, 58, 43, 0.15);
+        border-color: rgba(182, 58, 43, 0.28);
+      }
+
+      .log-line[data-level="error"] .explain {
+        background: rgba(182, 58, 43, 0.24);
       }
 
       .ok { color: var(--good); }
       .warn { color: var(--warn); }
 
+      @media (max-width: 1200px) {
+        body {
+          overflow: auto;
+        }
+
+        .wrap {
+          height: auto;
+          display: block;
+        }
+
+        .grid {
+          grid-template-columns: 340px minmax(0, 1fr);
+          align-items: start;
+        }
+
+        .log-col {
+          grid-column: 1 / -1;
+          position: static;
+          height: min(54vh, 560px);
+          min-height: 320px;
+        }
+
+        .hero {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+      }
+
       @media (max-width: 920px) {
         .grid, .media, .status, .actions, .row.two {
           grid-template-columns: 1fr;
+        }
+
+        .left-col,
+        .center-col {
+          overflow: visible;
+        }
+
+        .log-col {
+          height: min(46vh, 480px);
+          min-height: 280px;
+        }
+
+        .actions {
+          display: none;
+        }
+
+        .mobile-actions {
+          position: sticky;
+          bottom: 0;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          padding: 12px;
+          margin-top: 14px;
+          border-top: 1px solid var(--line);
+          background: rgba(243, 239, 229, 0.96);
+          backdrop-filter: blur(10px);
+          z-index: 20;
+        }
+
+        body {
+          padding-bottom: 88px;
         }
       }
     </style>
@@ -265,7 +511,7 @@
       </section>
 
       <section class="grid">
-        <aside class="panel stack">
+        <aside class="panel stack left-col">
           <div>
             <h2>会话控制</h2>
             <div class="row two">
@@ -295,7 +541,14 @@
               </label>
               <label>
                 视频上限 kbps
-                <input id="videoBitrate" type="number" min="80" step="20" value="280" />
+                <select id="videoBitrate">
+                  <option value="280" selected>标准模式 · 280 kbps</option>
+                  <option value="500">清晰模式 · 500 kbps</option>
+                  <option value="800">高清模式 · 800 kbps</option>
+                  <option value="1500">高码率模式 · 1500 kbps</option>
+                  <option value="2500">超清模式 · 2500 kbps</option>
+                  <option value="4000">1080p 高质量 · 4000 kbps</option>
+                </select>
               </label>
             </div>
             <div class="row two">
@@ -304,8 +557,27 @@
                 <input id="frameRate" type="number" min="5" max="30" value="12" />
               </label>
               <label>
-                分辨率高度
-                <input id="videoHeight" type="number" min="180" max="1080" value="360" />
+                分辨率
+                <select id="videoHeight">
+                  <option value="360">360p</option>
+                  <option value="720">720p</option>
+                  <option value="1080">1080p</option>
+                </select>
+              </label>
+            </div>
+            <div class="row two">
+              <label>
+                服务器总带宽
+                <select id="serverBandwidthMbps">
+                  <option value="10">10 Mbps</option>
+                  <option value="20" selected>20 Mbps</option>
+                  <option value="50">50 Mbps</option>
+                  <option value="100">100 Mbps</option>
+                </select>
+              </label>
+              <label>
+                TURN 单路估算
+                <input id="relayUsageEstimate" value="560 kbps" readonly />
               </label>
             </div>
             <div class="checks">
@@ -317,24 +589,20 @@
 
           <div>
             <h2>TURN 配置</h2>
-            <div class="row two">
+            <div class="row">
               <label>
                 TURN 预设
                 <select id="turnPreset">
-                  <option value="ip">turn.openrobot-rd.com</option>
-                  <option value="domain">turn.mynanocloud.com</option>
+                  <option value="ip">turn-ip.example.com</option>
+                  <option value="domain">turn.example.com</option>
                   <option value="custom">自定义</option>
                 </select>
-              </label>
-              <label>
-                配置操作
-                <button id="reloadConfigBtn" type="button">重新加载配置</button>
               </label>
             </div>
             <div class="row">
               <label>
                 URL 列表（每行一个）
-                <textarea id="iceUrls" placeholder="turn:turn.openrobot-rd.com:3478?transport=udp&#10;turn:turn.openrobot-rd.com:3478?transport=tcp"></textarea>
+                <textarea id="iceUrls" placeholder="turn:turn-ip.example.com:3478?transport=udp&#10;turn:turn-ip.example.com:3478?transport=tcp"></textarea>
               </label>
             </div>
             <div class="row two">
@@ -358,9 +626,14 @@
             <button id="copyBtn">复制分享链接</button>
             <button id="resetBtn">重置连接</button>
           </div>
+
+          <div class="mobile-actions">
+            <button class="primary" id="joinBtnMobile">加入房间</button>
+            <button class="primary" id="callBtnMobile">开始连接</button>
+          </div>
         </aside>
 
-        <main class="viewer">
+        <main class="center-col">
           <section class="status">
             <div class="stat">
               <div class="k">信令</div>
@@ -378,6 +651,31 @@
               <div class="k">对端</div>
               <div class="v" id="peerState">waiting</div>
             </div>
+            <div class="stat">
+              <div class="k">采集分辨率</div>
+              <div class="v" id="captureResolution">unknown</div>
+            </div>
+            <div class="stat">
+              <div class="k">发送分辨率</div>
+              <div class="v" id="sendResolution">unknown</div>
+            </div>
+            <div class="stat">
+              <div class="k">接收分辨率</div>
+              <div class="v" id="receiveResolution">unknown</div>
+            </div>
+            <div class="stat">
+              <div class="k">总带宽</div>
+              <div class="v" id="serverBandwidthState">20 Mbps</div>
+            </div>
+            <div class="stat">
+              <div class="k">理论并发</div>
+              <div class="v" id="capacityEstimate">35 路</div>
+            </div>
+          </section>
+
+          <section class="diag" id="diagnosis" data-level="info">
+            <div class="title" id="diagnosisTitle">等待开始</div>
+            <div class="detail" id="diagnosisDetail">先让两端加入同一个房间。页面会在这里直接告诉你当前卡在哪个环节。</div>
           </section>
 
           <section class="media">
@@ -391,11 +689,31 @@
             </div>
           </section>
 
-          <section class="panel">
-            <h2>事件日志</h2>
-            <div class="log" id="log"></div>
-          </section>
         </main>
+
+        <aside class="log-col">
+          <div class="log-head">
+            <h2>事件日志</h2>
+          </div>
+          <div class="log" id="log">
+            <section class="log-group">
+              <h3>信令</h3>
+              <div class="log-lines" id="logSignal"></div>
+            </section>
+            <section class="log-group">
+              <h3>协商</h3>
+              <div class="log-lines" id="logNegotiation"></div>
+            </section>
+            <section class="log-group">
+              <h3>ICE</h3>
+              <div class="log-lines" id="logIce"></div>
+            </section>
+            <section class="log-group">
+              <h3>媒体</h3>
+              <div class="log-lines" id="logMedia"></div>
+            </section>
+          </div>
+        </aside>
       </section>
     </div>
 
@@ -404,6 +722,10 @@
       const appConfig = window.APP_CONFIG || {};
       const peerId = crypto.randomUUID();
       const logEl = document.getElementById('log');
+      const logSignalEl = document.getElementById('logSignal');
+      const logNegotiationEl = document.getElementById('logNegotiation');
+      const logIceEl = document.getElementById('logIce');
+      const logMediaEl = document.getElementById('logMedia');
       const localVideo = document.getElementById('localVideo');
       const remoteVideo = document.getElementById('remoteVideo');
       const roomInput = document.getElementById('roomId');
@@ -412,22 +734,33 @@
       const videoBitrateInput = document.getElementById('videoBitrate');
       const frameRateInput = document.getElementById('frameRate');
       const videoHeightInput = document.getElementById('videoHeight');
+      const serverBandwidthInput = document.getElementById('serverBandwidthMbps');
+      const relayUsageEstimateInput = document.getElementById('relayUsageEstimate');
       const forceRelayInput = document.getElementById('forceRelay');
       const turnOnlyInput = document.getElementById('turnOnly');
       const autoStartInput = document.getElementById('autoStart');
       const turnPresetInput = document.getElementById('turnPreset');
-      const reloadConfigBtn = document.getElementById('reloadConfigBtn');
       const iceUrlsInput = document.getElementById('iceUrls');
       const turnUsernameInput = document.getElementById('turnUsername');
       const turnCredentialInput = document.getElementById('turnCredential');
       const joinBtn = document.getElementById('joinBtn');
+      const joinBtnMobile = document.getElementById('joinBtnMobile');
       const callBtn = document.getElementById('callBtn');
+      const callBtnMobile = document.getElementById('callBtnMobile');
       const copyBtn = document.getElementById('copyBtn');
       const resetBtn = document.getElementById('resetBtn');
       const wsStateEl = document.getElementById('wsState');
       const iceStateEl = document.getElementById('iceState');
       const candidateStateEl = document.getElementById('candidateState');
       const peerStateEl = document.getElementById('peerState');
+      const captureResolutionEl = document.getElementById('captureResolution');
+      const sendResolutionEl = document.getElementById('sendResolution');
+      const receiveResolutionEl = document.getElementById('receiveResolution');
+      const serverBandwidthStateEl = document.getElementById('serverBandwidthState');
+      const capacityEstimateEl = document.getElementById('capacityEstimate');
+      const diagnosisEl = document.getElementById('diagnosis');
+      const diagnosisTitleEl = document.getElementById('diagnosisTitle');
+      const diagnosisDetailEl = document.getElementById('diagnosisDetail');
 
       let ws;
       let pc = null;
@@ -438,25 +771,19 @@
       let activePeerId = null;
       let pollingStats = null;
       let tracksAdded = false;
-
-      const turnPresets = {
-        ip: [
-          'turn:turn.openrobot-rd.com:3478?transport=udp',
-          'turn:turn.openrobot-rd.com:3478?transport=tcp',
-        ],
-        domain: [
-          'turn:turn.mynanocloud.com:3480?transport=udp',
-          'turn:turn.mynanocloud.com:3480?transport=tcp',
-        ],
-      };
+      let negotiationInFlight = false;
+      const maxLogLines = 30;
 
       let runtimeConfig = { ...appConfig };
+      let turnPresets = normalizeTurnPresets(runtimeConfig.turnPresets);
       const params = new URLSearchParams(location.search);
-      const roleLocked = params.has('role');
+      const initialTurnPreset = params.get('turnPreset');
+      const roleLocked = params.has('role') && params.get('lockRole') === '1';
       roomInput.value = runtimeConfig.defaultRoom || 'demo-room';
       iceUrlsInput.value = (runtimeConfig.defaultTurnUrls || []).join('\n');
       turnUsernameInput.value = runtimeConfig.defaultTurnUsername || '';
       turnCredentialInput.value = runtimeConfig.defaultTurnCredential || '';
+      serverBandwidthInput.value = runtimeConfig.defaultServerBandwidthMbps || '20';
       forceRelayInput.checked = Boolean(runtimeConfig.defaultForceRelay);
       turnOnlyInput.checked = Boolean(runtimeConfig.defaultTurnOnly);
       autoStartInput.checked = Boolean(runtimeConfig.defaultAutoStart);
@@ -467,6 +794,15 @@
       if (params.get('relay') === '1') forceRelayInput.checked = true;
       if (params.get('turnOnly') === '0') turnOnlyInput.checked = false;
       if (params.get('turnOnly') === '1') turnOnlyInput.checked = true;
+      if (params.get('bitrate')) videoBitrateInput.value = params.get('bitrate');
+      if (params.get('fps')) frameRateInput.value = params.get('fps');
+      if (params.get('height')) videoHeightInput.value = params.get('height');
+      if (params.get('serverBandwidth')) serverBandwidthInput.value = params.get('serverBandwidth');
+      if (params.get('turnUrls')) {
+        iceUrlsInput.value = params.get('turnUrls').split(',').map((item) => item.trim()).filter(Boolean).join('\n');
+      }
+      if (params.has('turnUser')) turnUsernameInput.value = params.get('turnUser');
+      if (params.has('turnCred')) turnCredentialInput.value = params.get('turnCred');
 
       if (roleLocked) {
         roleInput.disabled = true;
@@ -478,8 +814,8 @@
           .map((line) => line.trim())
           .filter(Boolean)
           .join('\n');
-        for (const [preset, urls] of Object.entries(turnPresets)) {
-          if (normalized === urls.join('\n')) {
+        for (const [preset, config] of Object.entries(turnPresets)) {
+          if (normalized === config.urls.join('\n')) {
             return preset;
           }
         }
@@ -488,36 +824,329 @@
 
       function applyTurnPreset(preset) {
         if (preset === 'custom') return;
-        iceUrlsInput.value = turnPresets[preset].join('\n');
+        const config = turnPresets[preset];
+        if (!config) return;
+        iceUrlsInput.value = config.urls.join('\n');
+        turnUsernameInput.value = config.username || '';
+        turnCredentialInput.value = config.credential || '';
       }
 
       function setText(el, value) {
         el.textContent = value;
       }
 
-      function log(msg) {
-        const line = `${new Date().toISOString()} ${msg}`;
-        logEl.textContent += `${line}\n`;
+      function formatResolution(width, height) {
+        if (!width || !height) return 'unknown';
+        return `${width}x${height}`;
+      }
+
+      function hasUsableConnection() {
+        if (!pc) return false;
+        const iceState = pc.iceConnectionState;
+        const connState = pc.connectionState;
+        return (
+          iceState === 'connected' ||
+          iceState === 'completed' ||
+          connState === 'connected' ||
+          candidateStateEl.textContent !== 'unknown'
+        );
+      }
+
+      function bindVideoDiagnostics(videoEl, label) {
+        if (!videoEl || videoEl.dataset.diagBound === '1') return;
+        videoEl.dataset.diagBound = '1';
+        videoEl.addEventListener('loadedmetadata', () => {
+          if (label === 'local') {
+            setText(captureResolutionEl, formatResolution(videoEl.videoWidth, videoEl.videoHeight));
+          }
+          if (label === 'remote') {
+            setText(receiveResolutionEl, formatResolution(videoEl.videoWidth, videoEl.videoHeight));
+          }
+          log(`media video metadata loaded target=${label} size=${videoEl.videoWidth || 0}x${videoEl.videoHeight || 0}`);
+        });
+        videoEl.addEventListener('playing', () => {
+          log(`media video playing target=${label}`);
+        });
+        videoEl.addEventListener('waiting', () => {
+          log(`media video waiting target=${label}`, 'warn');
+        });
+        videoEl.addEventListener('stalled', () => {
+          log(`media video stalled target=${label}`, 'warn');
+        });
+        videoEl.addEventListener('error', () => {
+          const code = videoEl.error?.code || '-';
+          log(`media video error target=${label} code=${code}`, 'error');
+        });
+      }
+
+      function bindTrackDiagnostics(track, label) {
+        if (!track || track.__diagBound) return;
+        track.__diagBound = true;
+        log(`media track attached target=${label} kind=${track.kind} id=${track.id}`);
+        track.addEventListener('mute', () => {
+          log(`media track muted target=${label} kind=${track.kind} id=${track.id}`, 'warn');
+        });
+        track.addEventListener('unmute', () => {
+          log(`media track unmuted target=${label} kind=${track.kind} id=${track.id}`);
+        });
+        track.addEventListener('ended', () => {
+          log(`media track ended target=${label} kind=${track.kind} id=${track.id}`, 'warn');
+        });
+      }
+
+      function buildStateUrl({ shareRole = null, lockSharedRole = false } = {}) {
+        const url = new URL(location.href);
+        url.searchParams.set('room', roomInput.value.trim() || 'demo-room');
+        url.searchParams.set('role', shareRole || roleInput.value);
+        if (lockSharedRole) {
+          url.searchParams.set('lockRole', '1');
+        } else {
+          url.searchParams.delete('lockRole');
+        }
+        url.searchParams.set('relay', forceRelayInput.checked ? '1' : '0');
+        url.searchParams.set('turnOnly', turnOnlyInput.checked ? '1' : '0');
+        url.searchParams.set('turnPreset', turnPresetInput.value);
+        url.searchParams.set('bitrate', videoBitrateInput.value || '280');
+        url.searchParams.set('fps', frameRateInput.value || '12');
+        url.searchParams.set('height', videoHeightInput.value || '360');
+        url.searchParams.set('serverBandwidth', serverBandwidthInput.value || '20');
+
+        if (turnPresetInput.value === 'custom') {
+          const turnUrls = iceUrlsInput.value
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .join(',');
+          if (turnUrls) {
+            url.searchParams.set('turnUrls', turnUrls);
+          } else {
+            url.searchParams.delete('turnUrls');
+          }
+          if (turnUsernameInput.value.trim()) {
+            url.searchParams.set('turnUser', turnUsernameInput.value.trim());
+          } else {
+            url.searchParams.delete('turnUser');
+          }
+          if (turnCredentialInput.value.trim()) {
+            url.searchParams.set('turnCred', turnCredentialInput.value.trim());
+          } else {
+            url.searchParams.delete('turnCred');
+          }
+        } else {
+          url.searchParams.delete('turnUrls');
+          url.searchParams.delete('turnUser');
+          url.searchParams.delete('turnCred');
+        }
+
+        return url;
+      }
+
+      function syncUrlState() {
+        const next = buildStateUrl();
+        history.replaceState(null, '', next);
+      }
+
+      function updateCapacityEstimate() {
+        const bitrateKbps = Math.max(1, Number(videoBitrateInput.value || 280));
+        const serverMbps = Math.max(1, Number(serverBandwidthInput.value || 20));
+        const totalKbps = serverMbps * 1000;
+        const relayPerStreamKbps = bitrateKbps * 2;
+        const capacity = Math.max(1, Math.floor(totalKbps / relayPerStreamKbps));
+        relayUsageEstimateInput.value = `${relayPerStreamKbps} kbps`;
+        setText(serverBandwidthStateEl, `${serverMbps} Mbps`);
+        setText(capacityEstimateEl, `${capacity} 路`);
+      }
+
+      function detectLogLevel(msg) {
+        const text = String(msg).toLowerCase();
+        if (
+          text.includes('code=401') ||
+          text.includes(' failed') ||
+          text.includes('error') ||
+          text.includes('unauthorized') ||
+          text.includes('无法解析') ||
+          text.includes('连接失败')
+        ) {
+          return 'error';
+        }
+        if (
+          text.includes('warn') ||
+          text.includes('disconnected') ||
+          text.includes('候选地址探测失败') ||
+          text.includes('上一轮对端已经离开')
+        ) {
+          return 'warn';
+        }
+        return 'info';
+      }
+
+      function detectLogGroup(msg) {
+        const text = String(msg).toLowerCase();
+        if (
+          text.includes('signal ') ||
+          text.includes('joined room=') ||
+          text.includes('peers=') ||
+          text.includes('room first') ||
+          text.includes('信令')
+        ) {
+          return 'signal';
+        }
+        if (
+          text.includes('offer') ||
+          text.includes('answer') ||
+          text.includes('signalingstate') ||
+          text.includes('negotiation')
+        ) {
+          return 'negotiation';
+        }
+        if (
+          text.includes('ice') ||
+          text.includes('candidate') ||
+          text.includes('relay') ||
+          text.includes('direct')
+        ) {
+          return 'ice';
+        }
+        if (
+          text.includes('media') ||
+          text.includes('track') ||
+          text.includes('camera') ||
+          text.includes('screen') ||
+          text.includes('sender params')
+        ) {
+          return 'media';
+        }
+        return 'signal';
+      }
+
+      function getLogContainer(group) {
+        if (group === 'negotiation') return logNegotiationEl;
+        if (group === 'ice') return logIceEl;
+        if (group === 'media') return logMediaEl;
+        return logSignalEl;
+      }
+
+      function formatLocalTimestamp(date = new Date()) {
+        const pad = (value, width = 2) => String(value).padStart(width, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
+          + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.`
+          + `${pad(date.getMilliseconds(), 3)}`;
+      }
+
+      function log(msg, levelHint = null) {
+        const line = `${formatLocalTimestamp()} ${msg}`;
+        const level = levelHint || detectLogLevel(msg);
+        const group = detectLogGroup(msg);
+        const container = getLogContainer(group);
+        const row = document.createElement('div');
+        row.className = 'log-line';
+        row.dataset.level = level;
+        const parts = line.split(' | ');
+        const raw = document.createElement('span');
+        raw.className = 'raw';
+        raw.textContent = parts[0];
+        row.appendChild(raw);
+        if (parts[1]) {
+          const explain = document.createElement('span');
+          explain.className = 'explain';
+          explain.textContent = parts.slice(1).join(' | ');
+          row.appendChild(explain);
+        }
+        container.appendChild(row);
+        while (container.childElementCount > maxLogLines) {
+          container.removeChild(container.firstElementChild);
+        }
         logEl.scrollTop = logEl.scrollHeight;
         console.log(line);
       }
 
-      async function reloadRuntimeConfig() {
-        const response = await fetch(`/config.js?t=${Date.now()}`, { cache: 'no-store' });
-        const source = await response.text();
-        const nextWindow = {};
-        new Function('window', source)(nextWindow);
-        runtimeConfig = { ...(nextWindow.APP_CONFIG || {}) };
-        roomInput.value = runtimeConfig.defaultRoom || roomInput.value || 'demo-room';
-        iceUrlsInput.value = (runtimeConfig.defaultTurnUrls || []).join('\n');
-        turnUsernameInput.value = runtimeConfig.defaultTurnUsername || '';
-        turnCredentialInput.value = runtimeConfig.defaultTurnCredential || '';
-        forceRelayInput.checked = Boolean(runtimeConfig.defaultForceRelay);
-        turnOnlyInput.checked = Boolean(runtimeConfig.defaultTurnOnly);
-        autoStartInput.checked = Boolean(runtimeConfig.defaultAutoStart);
-        turnPresetInput.value = getSelectedTurnPreset(iceUrlsInput.value);
-        syncTurnPresetUi();
-        log('runtime config reloaded from /config.js');
+      function setDiagnosis(level, title, detail) {
+        diagnosisEl.dataset.level = level;
+        diagnosisTitleEl.textContent = title;
+        diagnosisDetailEl.textContent = detail;
+      }
+
+      function note(level, title, detail, rawMessage = null) {
+        setDiagnosis(level, title, detail);
+        log(rawMessage ? `${rawMessage} | ${title}: ${detail}` : `${title}: ${detail}`, level);
+      }
+
+      async function handleJoin() {
+        if (ws.readyState !== WebSocket.OPEN) {
+          log('signal not ready');
+          return;
+        }
+        roomId = roomInput.value.trim() || 'demo-room';
+        ws.send(JSON.stringify({ type: 'join', roomId, peerId }));
+      }
+
+      async function handleCall() {
+        await makeOffer();
+      }
+
+      function describeCandidate(candidate) {
+        if (!candidate) return 'null';
+        const candidateText = candidate.candidate || '';
+        const match = candidateText.match(/\btyp\s+(\w+)/);
+        const candidateType = candidate.type || match?.[1] || 'unknown';
+        return `${candidateType} ${candidate.protocol || '-'} ${candidate.address || '-'}:${candidate.port || '-'}`;
+      }
+
+      function normalizeTurnPresets(source) {
+        const fallback = {
+          ip: {
+            label: 'turn-ip.example.com',
+            urls: [
+              'turn:turn-ip.example.com:3478?transport=udp',
+              'turn:turn-ip.example.com:3478?transport=tcp',
+            ],
+            username: '',
+            credential: '',
+          },
+          domain: {
+            label: 'turn.example.com',
+            urls: [
+              'turn:turn.example.com:3480?transport=udp',
+              'turn:turn.example.com:3480?transport=tcp',
+            ],
+            username: '',
+            credential: '',
+          },
+        };
+        const normalized = {};
+        for (const [key, value] of Object.entries({ ...fallback, ...(source || {}) })) {
+          const urls = Array.isArray(value?.urls)
+            ? value.urls.map((item) => String(item).trim()).filter(Boolean)
+            : [];
+          normalized[key] = {
+            label: value?.label || fallback[key]?.label || key,
+            urls: urls.length ? urls : (fallback[key]?.urls || []),
+            username: value?.username || '',
+            credential: value?.credential || '',
+          };
+        }
+        return normalized;
+      }
+
+      function renderTurnPresetOptions() {
+        const selected = turnPresetInput.value;
+        const customOption = turnPresetInput.querySelector('option[value="custom"]');
+        turnPresetInput.innerHTML = '';
+        for (const [key, config] of Object.entries(turnPresets)) {
+          const option = document.createElement('option');
+          option.value = key;
+          option.textContent = config.label || key;
+          turnPresetInput.appendChild(option);
+        }
+        if (customOption) {
+          turnPresetInput.appendChild(customOption);
+        } else {
+          const option = document.createElement('option');
+          option.value = 'custom';
+          option.textContent = '自定义';
+          turnPresetInput.appendChild(option);
+        }
+        turnPresetInput.value = turnPresets[selected] ? selected : 'custom';
       }
 
       function parseIceServers() {
@@ -550,15 +1179,12 @@
       function syncRoleUi() {
         const viewer = isViewerRole();
         mediaSourceInput.disabled = viewer;
-        videoBitrateInput.disabled = viewer;
-        frameRateInput.disabled = viewer;
-        videoHeightInput.disabled = viewer;
         callBtn.disabled = viewer;
         if (viewer) {
           localVideo.srcObject = null;
-          log('viewer mode active: local capture and manual call disabled');
+          note('info', '当前是观看端', '本端不会采集摄像头，也不会主动发起连接；等待推流端发起即可。', 'viewer mode active: local capture and manual call disabled');
         } else {
-          log('publisher mode active');
+          note('info', '当前是推流端', '本端会采集本地媒体，并在另一端加入后发起连接。', 'publisher mode active');
         }
       }
 
@@ -582,6 +1208,7 @@
           height: { ideal: height, max: height },
           width: { ideal: Math.round(height * 16 / 9) },
         };
+        log(`media capture requested source=${mediaSourceInput.value} height=${height} frameRate=${frameRate}`);
 
         if (mediaSourceInput.value === 'screen') {
           localStream = await navigator.mediaDevices.getDisplayMedia({ video, audio });
@@ -589,7 +1216,11 @@
           localStream = await navigator.mediaDevices.getUserMedia({ video, audio });
         }
         localVideo.srcObject = localStream;
-        log(`local media ready source=${mediaSourceInput.value}`);
+        bindVideoDiagnostics(localVideo, 'local');
+        for (const track of localStream.getTracks()) {
+          bindTrackDiagnostics(track, 'local');
+        }
+        note('info', '本地媒体已就绪', `已经拿到${mediaSourceInput.value === 'screen' ? '屏幕' : '摄像头'}流，下一步会开始协商网络连接。`, `local media ready source=${mediaSourceInput.value}`);
         return localStream;
       }
 
@@ -611,6 +1242,54 @@
         }
       }
 
+      function applyVideoBitrateToSdp(sdp, bitrateKbps) {
+        const bitrate = Math.max(80, Number(bitrateKbps || 280));
+        const tias = bitrate * 1000;
+        const lines = String(sdp || '').split('\r\n');
+        const result = [];
+        let inVideoSection = false;
+        let injected = false;
+
+        for (const line of lines) {
+          if (line.startsWith('m=')) {
+            if (inVideoSection && !injected) {
+              result.push(`b=AS:${bitrate}`);
+              result.push(`b=TIAS:${tias}`);
+            }
+            inVideoSection = line.startsWith('m=video');
+            injected = false;
+            result.push(line);
+            continue;
+          }
+
+          if (inVideoSection && (line.startsWith('b=AS:') || line.startsWith('b=TIAS:'))) {
+            continue;
+          }
+
+          result.push(line);
+          if (inVideoSection && line.startsWith('c=')) {
+            result.push(`b=AS:${bitrate}`);
+            result.push(`b=TIAS:${tias}`);
+            injected = true;
+          }
+        }
+
+        if (inVideoSection && !injected) {
+          result.push(`b=AS:${bitrate}`);
+          result.push(`b=TIAS:${tias}`);
+        }
+
+        return result.join('\r\n');
+      }
+
+      function withVideoBitrateLimit(description) {
+        if (!description?.sdp) return description;
+        return {
+          type: description.type,
+          sdp: applyVideoBitrateToSdp(description.sdp, Number(videoBitrateInput.value || 280)),
+        };
+      }
+
       function stopStatsPolling() {
         if (pollingStats) {
           clearInterval(pollingStats);
@@ -622,7 +1301,51 @@
         if (!pc) return;
         const stats = await pc.getStats();
         let selectedPair = null;
+        let selectedPairId = null;
+        let outboundVideo = null;
+        let inboundVideo = null;
+
         stats.forEach((report) => {
+          if (report.type === 'transport' && report.selectedCandidatePairId) {
+            selectedPairId = report.selectedCandidatePairId;
+          }
+          if (!outboundVideo && report.type === 'outbound-rtp' && report.kind === 'video' && !report.isRemote) {
+            outboundVideo = report;
+          }
+          if (!inboundVideo && report.type === 'inbound-rtp' && report.kind === 'video' && !report.isRemote) {
+            inboundVideo = report;
+          }
+        });
+
+        if (outboundVideo) {
+          setText(
+            sendResolutionEl,
+            formatResolution(
+              outboundVideo.frameWidth || outboundVideo.frameWidthSent,
+              outboundVideo.frameHeight || outboundVideo.frameHeightSent,
+            ),
+          );
+        }
+        if (inboundVideo) {
+          setText(
+            receiveResolutionEl,
+            formatResolution(
+              inboundVideo.frameWidth || inboundVideo.frameWidthDecoded || inboundVideo.frameWidthReceived,
+              inboundVideo.frameHeight || inboundVideo.frameHeightDecoded || inboundVideo.frameHeightReceived,
+            ),
+          );
+        }
+
+        if (selectedPairId) {
+          selectedPair = stats.get(selectedPairId) || null;
+        }
+
+        stats.forEach((report) => {
+          if (selectedPair) return;
+          if (report.type === 'candidate-pair' && report.selected) {
+            selectedPair = report;
+            return;
+          }
           if (report.type === 'candidate-pair' && report.nominated && report.state === 'succeeded') {
             selectedPair = report;
           }
@@ -637,6 +1360,11 @@
         const relay = localType === 'relay' || remoteType === 'relay';
         const summary = `${relay ? 'relay' : 'direct'} / ${protocol} / ${localType}->${remoteType}`;
         setText(candidateStateEl, summary);
+        if (relay) {
+          setDiagnosis('success', '媒体已通过 TURN 中继连通', `当前候选对是 ${summary}，说明这一路媒体在走 coturn。`);
+        } else {
+          setDiagnosis('success', '媒体已直连', `当前候选对是 ${summary}，说明这一路媒体没有经过 TURN relay。`);
+        }
       }
 
       function startStatsPolling() {
@@ -650,6 +1378,7 @@
         stopStatsPolling();
         tracksAdded = false;
         activePeerId = null;
+        negotiationInFlight = false;
         if (pc) {
           pc.onicecandidate = null;
           pc.ontrack = null;
@@ -662,6 +1391,9 @@
         setText(iceStateEl, 'idle');
         setText(candidateStateEl, 'unknown');
         setText(peerStateEl, peers[0] || 'waiting');
+        setText(sendResolutionEl, 'unknown');
+        setText(receiveResolutionEl, 'unknown');
+        setDiagnosis('info', '连接已重置', '如果要重新测试，请让两端重新加入同一个房间。');
       }
 
       async function attachLocalTracks() {
@@ -670,6 +1402,7 @@
         if (!stream) return;
         for (const track of stream.getTracks()) {
           pc.addTrack(track, stream);
+          log(`media sender track added kind=${track.kind} id=${track.id}`);
         }
         tracksAdded = true;
         await applySenderParams();
@@ -681,9 +1414,15 @@
           iceServers: parseIceServers(),
           iceTransportPolicy: forceRelayInput.checked ? 'relay' : 'all',
         });
+        note('info', '已创建 WebRTC 连接', '开始采集候选地址，并准备和另一端交换连接信息。', `pc created role=${roleInput.value} relay=${forceRelayInput.checked} turnOnly=${turnOnlyInput.checked}`);
 
         pc.onicecandidate = (event) => {
-          if (!event.candidate || !activePeerId) return;
+          if (!event.candidate) {
+            note('info', '本端地址收集完成', '已经把本端可用的候选地址收集完，接下来等待对端地址和最终连通结果。', 'local candidate gathering complete');
+            return;
+          }
+          log(`local candidate ${describeCandidate(event.candidate)}`);
+          if (!activePeerId) return;
           ws.send(JSON.stringify({
             type: 'signal',
             to: activePeerId,
@@ -691,18 +1430,83 @@
           }));
         };
 
+        pc.onicecandidateerror = (event) => {
+          const url = event.url || '-';
+          const code = event.errorCode || '-';
+          const text = event.errorText || '-';
+          let level = 'warn';
+          let title = '候选地址探测失败';
+          let detail = `地址 ${url} 探测失败，错误码 ${code}。`;
+          if (code === 401) {
+            level = 'error';
+            title = 'TURN 凭证无效或已过期';
+            detail = 'coturn 拒绝了认证。通常是用户名/密码不匹配，或临时凭证已经过期。';
+          } else if (code === 701 && /host lookup/i.test(text)) {
+            level = 'error';
+            title = 'TURN 域名无法解析';
+            detail = `设备当前无法解析 ${url} 对应的域名。通常是 DNS 问题，或者该 TURN 域名在当前网络下不可达。`;
+          } else if (code === 701 && /allocate request timed out/i.test(text)) {
+            level = 'warn';
+            if (hasUsableConnection()) {
+              title = '单条 TURN 候选超时，但媒体已通过其他路径连通';
+              detail = '这条 TURN 地址在当前传输方式下没有及时响应，但浏览器已经用别的候选路径把媒体连上了。只要画面正常、最终候选对有效，就不是致命故障。';
+            } else {
+              title = 'TURN 分配超时，正在尝试其他候选路径';
+              detail = '浏览器向这条 TURN 地址申请 relay 资源时超时了。它通常还会继续尝试其他传输方式或其他候选地址，所以这不等于整条 WebRTC 连接已经失败。';
+            }
+          } else if (code === 701 && /desired network interface/i.test(text)) {
+            title = '当前网络接口不能使用这条 TURN 地址';
+            detail = '浏览器尝试了这条 TURN 地址，但当前网络接口没有合适的出口。通常还会继续尝试其他候选地址。';
+          }
+          note(level, title, detail, `icecandidateerror url=${url} code=${code} text=${text}`);
+        };
+
         pc.ontrack = (event) => {
           remoteVideo.srcObject = event.streams[0];
-          log('remote track received');
+          bindVideoDiagnostics(remoteVideo, 'remote');
+          if (event.track) {
+            bindTrackDiagnostics(event.track, 'remote');
+          }
+          if (event.streams[0]) {
+            for (const track of event.streams[0].getTracks()) {
+              bindTrackDiagnostics(track, 'remote-stream');
+            }
+            log(`media remote stream bound tracks=${event.streams[0].getTracks().map((track) => track.kind).join(',')}`);
+          }
+          note('info', '已收到远端媒体描述', '这说明 offer/answer 已经交换成功；接下来还要看 ICE 是否真正连通。', 'remote track received');
         };
 
         pc.oniceconnectionstatechange = () => {
           setText(iceStateEl, pc.iceConnectionState);
-          log(`iceConnectionState=${pc.iceConnectionState}`);
+          const state = pc.iceConnectionState;
+          if (state === 'checking') {
+            note('info', '正在测试网络连通性', '双方已经开始尝试候选地址，正在寻找能真正传媒体的路径。', `iceConnectionState=${state}`);
+          } else if (state === 'connected' || state === 'completed') {
+            note('success', 'ICE 已连通', '网络路径已经建立，媒体现在应该可以开始播放。', `iceConnectionState=${state}`);
+          } else if (state === 'failed') {
+            note('error', 'ICE 连接失败', 'offer/answer 虽然成功了，但双方没有找到可用的媒体传输路径。重点检查 TURN 地址、凭证和网络可达性。', `iceConnectionState=${state}`);
+          } else if (state === 'disconnected') {
+            note('warn', '媒体链路中断', '先前建立的连接已经断开，通常是网络波动或 TURN 路径失效。', `iceConnectionState=${state}`);
+          } else {
+            log(`iceConnectionState=${state}`);
+          }
         };
 
         pc.onconnectionstatechange = () => {
-          log(`connectionState=${pc.connectionState}`);
+          const state = pc.connectionState;
+          if (state === 'connecting') {
+            note('info', '正在建立媒体连接', '浏览器已经进入最终连接阶段，等待媒体真正开始传输。', `connectionState=${state}`);
+          } else if (state === 'connected') {
+            note('success', '媒体连接已建立', '如果对端正在推流，现在应该能看到视频或听到音频。', `connectionState=${state}`);
+          } else if (state === 'failed') {
+            note('error', '媒体连接建立失败', '协商完成后仍然没能把媒体真正连上。重点查看上面的 TURN / ICE 错误提示。', `connectionState=${state}`);
+          } else {
+            log(`connectionState=${state}`);
+          }
+        };
+
+        pc.onsignalingstatechange = () => {
+          log(`signalingState=${pc.signalingState}`);
         };
 
         startStatsPolling();
@@ -722,30 +1526,44 @@
           log('no peer in room');
           return;
         }
+        if (negotiationInFlight) {
+          log('skip offer: negotiation already in flight');
+          return;
+        }
+        if (pc && pc.signalingState !== 'stable') {
+          log(`skip offer: signalingState=${pc.signalingState}`);
+          return;
+        }
         activePeerId = peers[0];
         setText(peerStateEl, activePeerId);
         const conn = ensurePeerConnection();
         await attachLocalTracks();
-        const offer = await conn.createOffer({
-          offerToReceiveAudio: true,
-          offerToReceiveVideo: true,
-        });
-        await conn.setLocalDescription(offer);
-        ws.send(JSON.stringify({
-          type: 'signal',
-          to: activePeerId,
-          data: { offer },
-        }));
-        log(`offer sent to ${activePeerId}`);
+        negotiationInFlight = true;
+        try {
+          const offer = await conn.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true,
+          });
+          const limitedOffer = withVideoBitrateLimit(offer);
+          await conn.setLocalDescription(limitedOffer);
+          log(`offer created sdpLength=${limitedOffer.sdp?.length || 0} bitrateKbps=${Number(videoBitrateInput.value || 280)}`);
+          ws.send(JSON.stringify({
+            type: 'signal',
+            to: activePeerId,
+            data: { offer: limitedOffer },
+          }));
+          log(`offer sent to ${activePeerId}`);
+        } catch (error) {
+          negotiationInFlight = false;
+          throw error;
+        }
       }
 
       function buildShareUrl() {
-        const url = new URL(location.href);
-        url.searchParams.set('room', roomInput.value.trim() || 'demo-room');
-        url.searchParams.set('role', roleInput.value === 'publisher' ? 'viewer' : 'publisher');
-        url.searchParams.set('relay', forceRelayInput.checked ? '1' : '0');
-        url.searchParams.set('turnOnly', turnOnlyInput.checked ? '1' : '0');
-        return url.toString();
+        return buildStateUrl({
+          shareRole: roleInput.value === 'publisher' ? 'viewer' : 'publisher',
+          lockSharedRole: true,
+        }).toString();
       }
 
       function connectSignal() {
@@ -754,17 +1572,17 @@
 
         ws.onopen = () => {
           setText(wsStateEl, 'open');
-          log('signal connected');
+          note('info', '信令通道已连接', '页面已经连到信令服务，可以开始加入房间。', 'signal connected');
         };
 
         ws.onclose = () => {
           setText(wsStateEl, 'closed');
-          log('signal closed');
+          note('warn', '信令通道已断开', '页面已经失去和信令服务的连接，无法继续协商。', 'signal closed');
         };
 
         ws.onerror = () => {
           setText(wsStateEl, 'error');
-          log('signal error');
+          note('error', '信令通道异常', '页面无法正常和信令服务通信，先检查页面入口是否可访问。', 'signal error');
         };
 
         ws.onmessage = async (event) => {
@@ -772,7 +1590,7 @@
           if (msg.type === 'joined') {
             joined = true;
             roomId = msg.roomId;
-            log(`joined room=${msg.roomId} peerId=${msg.peerId}`);
+            note('info', '已进入房间', '现在等待另一端加入，或等待现有对端发起连接。', `joined room=${msg.roomId} peerId=${msg.peerId}`);
             if (!isViewerRole()) {
               await ensureMedia();
             }
@@ -781,9 +1599,29 @@
 
           if (msg.type === 'peers') {
             peers = msg.peers.filter((id) => id !== peerId);
+            if (activePeerId && !peers.includes(activePeerId)) {
+              note('warn', '上一轮对端已经离开', '旧的连接状态已清理；如果有新对端加入，会重新发起协商。', `active peer ${activePeerId} left room; clearing negotiation state`);
+              activePeerId = null;
+              negotiationInFlight = false;
+              if (pc && pc.signalingState === 'stable') {
+                resetPeerConnection();
+              }
+            }
             setText(peerStateEl, peers[0] || 'waiting');
-            log(`peers=${JSON.stringify(peers)}`);
-            if (autoStartInput.checked && !isViewerRole() && peers.length && joined) {
+            if (!peers.length) {
+              note('info', '房间里还没有对端', '先在另一台设备上打开同一个房间。', `peers=${JSON.stringify(peers)}`);
+            } else {
+              note('info', '发现对端', '两端已经在同一个房间，接下来会开始连接协商。', `peers=${JSON.stringify(peers)}`);
+            }
+            if (
+              autoStartInput.checked &&
+              !isViewerRole() &&
+              peers.length &&
+              joined &&
+              !activePeerId &&
+              !negotiationInFlight &&
+              (!pc || pc.signalingState === 'stable')
+            ) {
               await makeOffer();
             }
             return;
@@ -797,36 +1635,40 @@
           await attachLocalTracks();
 
           if (msg.data.offer) {
+            negotiationInFlight = false;
+            note('info', '已收到对端连接请求', '正在生成 answer 并返回给对端。', `offer received from ${msg.from} sdpLength=${msg.data.offer.sdp?.length || 0}`);
             await conn.setRemoteDescription(msg.data.offer);
             const answer = await conn.createAnswer();
-            await conn.setLocalDescription(answer);
+            const limitedAnswer = withVideoBitrateLimit(answer);
+            await conn.setLocalDescription(limitedAnswer);
+            log(`answer created sdpLength=${limitedAnswer.sdp?.length || 0} bitrateKbps=${Number(videoBitrateInput.value || 280)}`);
             ws.send(JSON.stringify({
               type: 'signal',
               to: msg.from,
-              data: { answer },
+              data: { answer: limitedAnswer },
             }));
-            log(`answer sent to ${msg.from}`);
+            note('info', '已返回连接应答', '现在等待双方继续交换候选地址，并真正建立媒体链路。', `answer sent to ${msg.from}`);
           } else if (msg.data.answer) {
+            note('info', '对端已接受连接请求', 'offer/answer 交换完成，下一步看 ICE 是否能连通。', `answer received from ${msg.from} sdpLength=${msg.data.answer.sdp?.length || 0}`);
             await conn.setRemoteDescription(msg.data.answer);
+            negotiationInFlight = false;
             log(`answer applied from ${msg.from}`);
           } else if (msg.data.candidate) {
-            await conn.addIceCandidate(msg.data.candidate);
+            log(`remote candidate from ${msg.from} ${describeCandidate(msg.data.candidate)}`);
+            try {
+              await conn.addIceCandidate(msg.data.candidate);
+            } catch (error) {
+              log(`addIceCandidate failed: ${error.message}`);
+            }
           }
         };
       }
 
-      joinBtn.onclick = async () => {
-        if (ws.readyState !== WebSocket.OPEN) {
-          log('signal not ready');
-          return;
-        }
-        roomId = roomInput.value.trim() || 'demo-room';
-        ws.send(JSON.stringify({ type: 'join', roomId, peerId }));
-      };
+      joinBtn.onclick = handleJoin;
+      joinBtnMobile.onclick = handleJoin;
 
-      callBtn.onclick = async () => {
-        await makeOffer();
-      };
+      callBtn.onclick = handleCall;
+      callBtnMobile.onclick = handleCall;
 
       copyBtn.onclick = async () => {
         const url = buildShareUrl();
@@ -841,16 +1683,14 @@
 
       roleInput.onchange = () => {
         syncRoleUi();
+        syncUrlState();
       };
 
       turnPresetInput.onchange = () => {
         applyTurnPreset(turnPresetInput.value);
         syncTurnPresetUi();
         log(`turn preset=${turnPresetInput.value}`);
-      };
-
-      reloadConfigBtn.onclick = async () => {
-        await reloadRuntimeConfig();
+        syncUrlState();
       };
 
       iceUrlsInput.addEventListener('input', () => {
@@ -859,11 +1699,36 @@
           turnPresetInput.value = detected;
           syncTurnPresetUi();
         }
+        syncUrlState();
       });
 
-      turnPresetInput.value = getSelectedTurnPreset(iceUrlsInput.value);
+      roomInput.addEventListener('input', syncUrlState);
+      videoBitrateInput.addEventListener('change', syncUrlState);
+      frameRateInput.addEventListener('input', syncUrlState);
+      videoHeightInput.addEventListener('change', syncUrlState);
+      videoBitrateInput.addEventListener('change', updateCapacityEstimate);
+      serverBandwidthInput.addEventListener('change', updateCapacityEstimate);
+      serverBandwidthInput.addEventListener('change', syncUrlState);
+      forceRelayInput.addEventListener('change', syncUrlState);
+      turnOnlyInput.addEventListener('change', syncUrlState);
+      turnUsernameInput.addEventListener('input', syncUrlState);
+      turnCredentialInput.addEventListener('input', syncUrlState);
+
+      renderTurnPresetOptions();
+      bindVideoDiagnostics(localVideo, 'local');
+      bindVideoDiagnostics(remoteVideo, 'remote');
+      if (initialTurnPreset && turnPresets[initialTurnPreset] && !params.get('turnUrls')) {
+        turnPresetInput.value = initialTurnPreset;
+        applyTurnPreset(initialTurnPreset);
+      } else if (initialTurnPreset === 'custom' || params.get('turnUrls')) {
+        turnPresetInput.value = 'custom';
+      } else {
+        turnPresetInput.value = getSelectedTurnPreset(iceUrlsInput.value);
+      }
       syncTurnPresetUi();
       syncRoleUi();
+      updateCapacityEstimate();
+      syncUrlState();
       connectSignal();
     </script>
   </body>

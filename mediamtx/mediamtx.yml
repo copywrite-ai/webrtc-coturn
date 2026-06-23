@@ -1,0 +1,42 @@
+logLevel: info
+logDestinations: [stdout]
+
+api: true
+apiAddress: :9997
+
+hls: false
+rtsp: false
+rtmp: false
+srt: false
+moq: false
+
+webrtc: true
+webrtcAddress: :8889
+webrtcEncryption: false
+webrtcAllowOrigins: ["*"]
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: ""
+webrtcIPsFromInterfaces: false
+webrtcIPsFromInterfacesList: []
+webrtcAdditionalHosts:
+  - media.example.com
+
+# MediaMTX also needs TURN on the server side; browser-only ICE config is not enough for WHEP.
+# Replace these placeholders with real short-lived TURN credentials in your own deployment.
+webrtcICEServers2:
+  - url: turn:turn.example.com:3478?transport=udp
+    username: REPLACE_WITH_TEMPORARY_TURN_USERNAME
+    password: REPLACE_WITH_TEMPORARY_TURN_CREDENTIAL
+  - url: turn:turn.example.com:3478?transport=tcp
+    username: REPLACE_WITH_TEMPORARY_TURN_USERNAME
+    password: REPLACE_WITH_TEMPORARY_TURN_CREDENTIAL
+
+pathDefaults:
+  source: publisher
+  overridePublisher: true
+  alwaysAvailable: true
+  alwaysAvailableTracks:
+    - codec: H264
+
+paths:
+  demo-stream: {}

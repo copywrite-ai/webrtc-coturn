@@ -12,6 +12,8 @@
 
 - `server.mjs`：静态文件服务 + WebSocket 信令
 - `public/index.html`：单页 publisher/viewer 验证界面
+- `public/whip-publisher.html`：最小 WHIP 推流页
+- `public/whep-player.html`：最小 WHEP 播放页
 - `Dockerfile` 和 `docker-compose.yml`：本地容器运行方式
 - `INTEGRATION_DESIGN.md`：如何接入现有前端和现有 BFF
 
@@ -81,6 +83,8 @@ cp .env.example .env
 - `DEFAULT_TURN_URLS`：逗号分隔的 TURN 地址列表
 - `DEFAULT_TURN_USERNAME`：可选的默认 TURN 用户名
 - `DEFAULT_TURN_CREDENTIAL`：可选的默认 TURN 密码
+- `DEFAULT_WHIP_URL`：默认 WHIP 推流地址
+- `DEFAULT_WHEP_URL`：默认 WHEP 播放地址
 - `DEFAULT_FORCE_RELAY`：`1` 或 `0`
 - `DEFAULT_TURN_ONLY`：`1` 或 `0`
 - `DEFAULT_AUTO_START`：`1` 或 `0`
@@ -93,10 +97,42 @@ DEFAULT_ROOM=demo-room
 DEFAULT_TURN_URLS=turn:turn.example.com:3478?transport=udp,turn:turn.example.com:3478?transport=tcp
 DEFAULT_TURN_USERNAME=
 DEFAULT_TURN_CREDENTIAL=
+DEFAULT_WHIP_URL=http://localhost:8889/demo-stream/whip
+DEFAULT_WHEP_URL=http://localhost:8889/demo-stream/whep
 DEFAULT_FORCE_RELAY=1
 DEFAULT_TURN_ONLY=1
 DEFAULT_AUTO_START=1
 ```
+
+## WHEP 媒体服务器
+
+这个分支额外引入了 `mediamtx` 服务，用来在原来的浏览器对浏览器验证页之外，再提供一个标准的 WHEP 播放入口，并使用内置的 always-available H264 流作为测试源。
+
+启动方式：
+
+```bash
+docker compose up --build -d
+```
+
+然后打开：
+
+```text
+http://localhost:9001/whep-player.html
+```
+
+默认本地地址：
+
+```text
+http://localhost:9001/mtx/demo-stream/whep
+```
+
+建议本地验证顺序：
+
+1. 在浏览器或另一台设备打开 `/whep-player.html`。
+2. 如果网络受限，继续沿用当前项目里已经配置好的 TURN 参数。
+3. 直接播放内置的 `demo-stream`。
+
+页面会自动复用 `/config.js` 里的 TURN 默认值，所以你现有的 `coturn` 部署不需要改动。Web 应用还会把 `/mtx/*` 反代到本地 `MediaMTX`，因此 `tailscale serve` 只保留 `9001` 这一条入口就够了。如果 `MediaMTX` 使用宿主机网络，在 Docker Compose 里这个上游地址应为 `http://host.docker.internal:8889`。
 
 如果用 Docker Compose，项目根目录下存在 `.env` 时会自动读取。
 

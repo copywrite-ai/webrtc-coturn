@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WHEP Player</title>
+    <script src="/config.js"></script>
+    <style>
+      :root {
+        --bg: #f2f4f7;
+        --panel: #ffffff;
+        --line: rgba(15, 23, 42, 0.12);
+        --text: #0f172a;
+        --muted: #64748b;
+        --accent: #0f766e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "SF Pro Display", "PingFang SC", sans-serif;
+        color: var(--text);
+        background: linear-gradient(180deg, #f8fafc 0%, var(--bg) 100%);
+      }
+      .wrap {
+        width: min(980px, calc(100% - 24px));
+        margin: 24px auto 40px;
+        display: grid;
+        gap: 16px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 18px;
+      }
+      .grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: 1fr 1fr;
+      }
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      input, textarea, button {
+        font: inherit;
+      }
+      input, textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px 12px;
+      }
+      textarea {
+        min-height: 72px;
+        resize: vertical;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+      }
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 14px;
+        cursor: pointer;
+        background: #dbeafe;
+      }
+      button.primary {
+        background: var(--accent);
+        color: white;
+      }
+      video {
+        width: 100%;
+        min-height: 360px;
+        border-radius: 16px;
+        background: #0f172a;
+      }
+      .log {
+        min-height: 180px;
+        max-height: 280px;
+        overflow: auto;
+        white-space: pre-wrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        padding: 12px;
+        border-radius: 14px;
+        background: #111827;
+        color: #e5e7eb;
+      }
+      .hint {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      @media (max-width: 760px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="panel">
+        <h1>WHEP Player</h1>
+        <p class="hint">
+          这是一个最小 WHEP 播放页。它不会使用当前项目的自定义 WebSocket signaling，而是直接对接标准 WHEP endpoint。
+        </p>
+        <p class="hint">
+          如果你的 WHEP 服务端没有内置 ICE 配置，可以直接复用当前项目通过 <code>/config.js</code> 注入的 TURN 默认值。
+        </p>
+      </section>
+
+      <section class="panel">
+        <div class="grid">
+          <label>
+            WHEP 地址
+            <input id="whepUrl" value="http://localhost:8889/demo-stream/whep" />
+          </label>
+          <label>
+            Bearer Token（可选）
+            <input id="bearerToken" placeholder="optional bearer token" />
+          </label>
+        </div>
+        <div class="grid" style="margin-top: 12px;">
+          <label>
+            ICE / TURN 地址（每行一个，可选）
+            <textarea id="iceUrls" placeholder="turn:turn.example.com:3478?transport=udp&#10;turn:turn.example.com:3478?transport=tcp"></textarea>
+          </label>
+          <div class="grid" style="grid-template-columns: 1fr;">
+            <label>
+              Username（可选）
+              <input id="turnUsername" placeholder="temporary username" />
+            </label>
+            <label>
+              Credential（可选）
+              <input id="turnCredential" placeholder="temporary credential" />
+            </label>
+          </div>
+        </div>
+        <div class="actions" style="margin-top: 12px;">
+          <button class="primary" id="startBtn">开始播放</button>
+          <button id="stopBtn">停止</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <video id="video" autoplay playsinline controls muted></video>
+      </section>
+
+      <section class="panel">
+        <h2>日志</h2>
+        <div id="log" class="log"></div>
+      </section>
+    </div>
+
+    <script>
+      const whepUrlInput = document.getElementById('whepUrl');
+      const bearerTokenInput = document.getElementById('bearerToken');
+      const iceUrlsInput = document.getElementById('iceUrls');
+      const turnUsernameInput = document.getElementById('turnUsername');
+      const turnCredentialInput = document.getElementById('turnCredential');
+      const startBtn = document.getElementById('startBtn');
+      const stopBtn = document.getElementById('stopBtn');
+      const video = document.getElementById('video');
+      const logEl = document.getElementById('log');
+      const appConfig = window.APP_CONFIG || {};
+
+      let pc = null;
+      let sessionUrl = null;
+
+      function log(message) {
+        const line = `${new Date().toISOString()} ${message}`;
+        logEl.textContent += `${line}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+        console.log(line);
+      }
+
+      function buildIceServers() {
+        const urls = iceUrlsInput.value
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean);
+
+        if (!urls.length) {
+          return [];
+        }
+
+        return [{
+          urls,
+          username: turnUsernameInput.value.trim(),
+          credential: turnCredentialInput.value.trim(),
+        }];
+      }
+
+      function applyDefaults() {
+        const defaultWhepUrl = appConfig.defaultWhepUrl || 'http://localhost:8889/demo-stream/whep';
+        whepUrlInput.value = defaultWhepUrl;
+        iceUrlsInput.value = (appConfig.defaultTurnUrls || []).join('\n');
+        turnUsernameInput.value = appConfig.defaultTurnUsername || '';
+        turnCredentialInput.value = appConfig.defaultTurnCredential || '';
+      }
+
+      function waitForIceGatheringComplete(connection) {
+        if (connection.iceGatheringState === 'complete') {
+          return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+          const handler = () => {
+            if (connection.iceGatheringState === 'complete') {
+              connection.removeEventListener('icegatheringstatechange', handler);
+              resolve();
+            }
+          };
+          connection.addEventListener('icegatheringstatechange', handler);
+        });
+      }
+
+      async function stopPlayback() {
+        if (sessionUrl) {
+          try {
+            await fetch(sessionUrl, { method: 'DELETE' });
+            log(`deleted session ${sessionUrl}`);
+          } catch (error) {
+            log(`delete session failed: ${error.message}`);
+          }
+        }
+        sessionUrl = null;
+        if (pc) {
+          pc.close();
+          pc = null;
+        }
+        video.srcObject = null;
+      }
+
+      async function startPlayback() {
+        await stopPlayback();
+
+        pc = new RTCPeerConnection({ iceServers: buildIceServers() });
+        pc.ontrack = (event) => {
+          video.srcObject = event.streams[0];
+          log('remote track received');
+        };
+        pc.oniceconnectionstatechange = () => {
+          log(`iceConnectionState=${pc.iceConnectionState}`);
+        };
+        pc.onconnectionstatechange = () => {
+          log(`connectionState=${pc.connectionState}`);
+        };
+
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true,
+        });
+        await pc.setLocalDescription(offer);
+        await waitForIceGatheringComplete(pc);
+
+        const headers = {
+          'Content-Type': 'application/sdp',
+        };
+        const token = bearerTokenInput.value.trim();
+        if (token) {
+          headers.Authorization = `Bearer ${token}`;
+        }
+
+        const response = await fetch(whepUrlInput.value.trim(), {
+          method: 'POST',
+          headers,
+          body: pc.localDescription.sdp,
+        });
+
+        if (!response.ok) {
+          throw new Error(`WHEP request failed: ${response.status}`);
+        }
+
+        const answerSdp = await response.text();
+        const location = response.headers.get('Location');
+        sessionUrl = location ? new URL(location, whepUrlInput.value.trim()).toString() : null;
+        if (sessionUrl) {
+          log(`session created: ${sessionUrl}`);
+        }
+
+        await pc.setRemoteDescription({
+          type: 'answer',
+          sdp: answerSdp,
+        });
+        log('WHEP playback started');
+      }
+
+      startBtn.onclick = async () => {
+        try {
+          await startPlayback();
+        } catch (error) {
+          log(`start failed: ${error.message}`);
+        }
+      };
+
+      stopBtn.onclick = async () => {
+        await stopPlayback();
+        log('playback stopped');
+      };
+
+      applyDefaults();
+    </script>
+  </body>
+</html>
