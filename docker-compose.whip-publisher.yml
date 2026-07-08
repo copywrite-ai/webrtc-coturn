@@ -1,0 +1,104 @@
+services:
+  fish_front_whip:
+    build:
+      context: ./docker/whip-publisher
+    image: tunnel-whip-publisher:local
+    environment:
+      STREAM_NAME: fish_front
+      DEVICE_ID: "${DEVICE_ID:?DEVICE_ID is required}"
+      WHIP_BASE_URL: "${WHIP_BASE_URL:-https://media-proxy.nexusdot.cn/noproxy}"
+      WIDTH: "${WIDTH:-1280}"
+      HEIGHT: "${HEIGHT:-720}"
+      FPS: "${FPS:-30}"
+      BITRATE_KBPS: "${BITRATE_KBPS:-8000}"
+      KEY_INT_MAX: "${KEY_INT_MAX:-60}"
+      PATTERN: "${PATTERN:-smpte}"
+      SPEED_PRESET: "${SPEED_PRESET:-ultrafast}"
+      GST_DEBUG_LEVEL: "${GST_DEBUG_LEVEL:-2}"
+      GST_DEBUG: "${GST_DEBUG:-}"
+      GST_DEBUG_NO_COLOR: "${GST_DEBUG_NO_COLOR:-0}"
+      WHIP_STUN_SERVER: "${WHIP_STUN_SERVER:-}"
+      WHIP_TURN_SERVER: "${WHIP_TURN_SERVER:-}"
+      WHIP_TURN_SERVER_2: "${WHIP_TURN_SERVER_2:-}"
+      WHIP_FORCE_TURN: "${WHIP_FORCE_TURN:-0}"
+      WHIP_SINK_EXTRA_ARGS: "${WHIP_SINK_EXTRA_ARGS:-}"
+      X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
+    restart: unless-stopped
+
+  fish_back_whip:
+    image: tunnel-whip-publisher:local
+    depends_on:
+      - fish_front_whip
+    environment:
+      STREAM_NAME: fish_back
+      DEVICE_ID: "${DEVICE_ID:?DEVICE_ID is required}"
+      WHIP_BASE_URL: "${WHIP_BASE_URL:-https://media-proxy.nexusdot.cn/noproxy}"
+      WIDTH: "${WIDTH:-1280}"
+      HEIGHT: "${HEIGHT:-720}"
+      FPS: "${FPS:-30}"
+      BITRATE_KBPS: "${BITRATE_KBPS:-8000}"
+      KEY_INT_MAX: "${KEY_INT_MAX:-60}"
+      PATTERN: "${PATTERN:-smpte}"
+      SPEED_PRESET: "${SPEED_PRESET:-ultrafast}"
+      GST_DEBUG_LEVEL: "${GST_DEBUG_LEVEL:-2}"
+      GST_DEBUG: "${GST_DEBUG:-}"
+      GST_DEBUG_NO_COLOR: "${GST_DEBUG_NO_COLOR:-0}"
+      WHIP_STUN_SERVER: "${WHIP_STUN_SERVER:-}"
+      WHIP_TURN_SERVER: "${WHIP_TURN_SERVER:-}"
+      WHIP_TURN_SERVER_2: "${WHIP_TURN_SERVER_2:-}"
+      WHIP_FORCE_TURN: "${WHIP_FORCE_TURN:-0}"
+      WHIP_SINK_EXTRA_ARGS: "${WHIP_SINK_EXTRA_ARGS:-}"
+      X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
+    restart: unless-stopped
+
+  fish_left_whip:
+    image: tunnel-whip-publisher:local
+    depends_on:
+      - fish_front_whip
+    environment:
+      STREAM_NAME: fish_left
+      DEVICE_ID: "${DEVICE_ID:?DEVICE_ID is required}"
+      WHIP_BASE_URL: "${WHIP_BASE_URL:-https://media-proxy.nexusdot.cn/noproxy}"
+      WIDTH: "${WIDTH:-1280}"
+      HEIGHT: "${HEIGHT:-720}"
+      FPS: "${FPS:-30}"
+      BITRATE_KBPS: "${BITRATE_KBPS:-8000}"
+      KEY_INT_MAX: "${KEY_INT_MAX:-60}"
+      PATTERN: "${PATTERN:-smpte}"
+      SPEED_PRESET: "${SPEED_PRESET:-ultrafast}"
+      GST_DEBUG_LEVEL: "${GST_DEBUG_LEVEL:-2}"
+      GST_DEBUG: "${GST_DEBUG:-}"
+      GST_DEBUG_NO_COLOR: "${GST_DEBUG_NO_COLOR:-0}"
+      WHIP_STUN_SERVER: "${WHIP_STUN_SERVER:-}"
+      WHIP_TURN_SERVER: "${WHIP_TURN_SERVER:-}"
+      WHIP_TURN_SERVER_2: "${WHIP_TURN_SERVER_2:-}"
+      WHIP_FORCE_TURN: "${WHIP_FORCE_TURN:-0}"
+      WHIP_SINK_EXTRA_ARGS: "${WHIP_SINK_EXTRA_ARGS:-}"
+      X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
+    restart: unless-stopped
+
+  fish_right_whip:
+    image: tunnel-whip-publisher:local
+    depends_on:
+      - fish_front_whip
+    environment:
+      STREAM_NAME: fish_right
+      DEVICE_ID: "${DEVICE_ID:?DEVICE_ID is required}"
+      WHIP_BASE_URL: "${WHIP_BASE_URL:-https://media-proxy.nexusdot.cn/noproxy}"
+      WIDTH: "${WIDTH:-1280}"
+      HEIGHT: "${HEIGHT:-720}"
+      FPS: "${FPS:-30}"
+      BITRATE_KBPS: "${BITRATE_KBPS:-8000}"
+      KEY_INT_MAX: "${KEY_INT_MAX:-60}"
+      PATTERN: "${PATTERN:-smpte}"
+      SPEED_PRESET: "${SPEED_PRESET:-ultrafast}"
+      GST_DEBUG_LEVEL: "${GST_DEBUG_LEVEL:-2}"
+      GST_DEBUG: "${GST_DEBUG:-}"
+      GST_DEBUG_NO_COLOR: "${GST_DEBUG_NO_COLOR:-0}"
+      WHIP_STUN_SERVER: "${WHIP_STUN_SERVER:-}"
+      WHIP_TURN_SERVER: "${WHIP_TURN_SERVER:-}"
+      WHIP_TURN_SERVER_2: "${WHIP_TURN_SERVER_2:-}"
+      WHIP_FORCE_TURN: "${WHIP_FORCE_TURN:-0}"
+      WHIP_SINK_EXTRA_ARGS: "${WHIP_SINK_EXTRA_ARGS:-}"
+      X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
+    restart: unless-stopped
