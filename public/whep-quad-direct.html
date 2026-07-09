@@ -19,25 +19,27 @@
         margin: 0;
         font-family: "SF Pro Display", "PingFang SC", sans-serif;
         color: var(--text);
+        min-height: 100vh;
         background:
           radial-gradient(circle at top left, rgba(15, 118, 110, 0.10), transparent 28%),
           linear-gradient(180deg, #f8fafc 0%, var(--bg) 100%);
       }
       .wrap {
-        width: min(1480px, calc(100% - 24px));
-        margin: 20px auto 32px;
+        width: min(1720px, calc(100% - 16px));
+        margin: 0 auto;
+        padding: 8px 0 12px;
         display: grid;
-        gap: 16px;
+        gap: 10px;
       }
       .panel {
         background: var(--panel);
         border: 1px solid var(--line);
-        border-radius: 16px;
-        padding: 16px;
+        border-radius: 12px;
+        padding: 12px 14px;
       }
       .toolbar {
         display: flex;
-        gap: 10px;
+        gap: 8px;
         align-items: center;
         flex-wrap: wrap;
       }
@@ -51,25 +53,35 @@
         font-size: 12px;
         font-weight: 600;
       }
+      .toolbar-spacer {
+        flex: 1 1 auto;
+      }
       h1, p, h2 {
         margin: 0;
+      }
+      h1 {
+        font-size: 20px;
       }
       .subtle {
         color: var(--muted);
         font-size: 13px;
       }
       .actions {
-        display: flex;
-        gap: 10px;
+        display: inline-flex;
+        gap: 8px;
         flex-wrap: wrap;
+      }
+      .hero-copy {
+        display: grid;
+        gap: 4px;
       }
       button, input {
         font: inherit;
       }
       button {
         border: 0;
-        border-radius: 12px;
-        padding: 10px 14px;
+        border-radius: 10px;
+        padding: 8px 12px;
         cursor: pointer;
         background: #dbeafe;
       }
@@ -77,32 +89,82 @@
         background: var(--accent);
         color: #fff;
       }
+      button.ghost {
+        background: #e2e8f0;
+        color: var(--text);
+      }
+      details summary {
+        cursor: pointer;
+        list-style: none;
+      }
+      details summary::-webkit-details-marker {
+        display: none;
+      }
+      .details-inline summary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 34px;
+        padding: 0 12px;
+        border-radius: 10px;
+        background: #e2e8f0;
+        color: var(--text);
+        font-size: 13px;
+      }
+      .details-inline[open] summary {
+        background: #cbd5e1;
+      }
+      .collapsible-body {
+        margin-top: 10px;
+      }
       .grid {
         display: grid;
-        gap: 14px;
+        gap: 10px;
         grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: stretch;
       }
       .slot {
         border: 1px solid var(--line);
-        border-radius: 16px;
+        border-radius: 12px;
         overflow: hidden;
         background: #fff;
+        display: grid;
+        grid-template-rows: auto minmax(0, auto) auto;
       }
       .slot-head {
         display: grid;
-        gap: 10px;
-        padding: 14px;
+        gap: 8px;
+        padding: 10px 12px;
         border-bottom: 1px solid var(--line);
       }
       .slot-title {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-start;
         gap: 8px;
+      }
+      .slot-title strong {
+        font-size: 16px;
       }
       .status {
         font-size: 12px;
         color: var(--muted);
+      }
+      .slot-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .slot-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .slot-config {
+        display: grid;
+        gap: 8px;
       }
       label {
         display: grid;
@@ -114,29 +176,86 @@
         width: 100%;
         border: 1px solid var(--line);
         border-radius: 10px;
-        padding: 10px 12px;
+        padding: 8px 10px;
+      }
+      .slot-media {
+        background: #020617;
       }
       video {
         width: 100%;
         aspect-ratio: 16 / 9;
-        background: #0f172a;
+        object-fit: contain;
+        background: #020617;
         display: block;
       }
-      .slot-actions {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
+      .slot-footer {
+        display: grid;
+        gap: 10px;
+        padding: 10px 12px 12px;
+        border-top: 1px solid var(--line);
       }
       .metrics {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      .metric {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: #f8fafc;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+      }
+      .metric-label {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .metric-value {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .metric-sub {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .chart-panel {
+        display: grid;
+        gap: 8px;
+        padding: 10px;
+        border-radius: 10px;
+        background: #f8fafc;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+      }
+      .chart-head {
         display: flex;
-        gap: 14px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .chart-stats {
+        display: inline-flex;
+        gap: 12px;
         flex-wrap: wrap;
         font-size: 12px;
         color: var(--muted);
       }
+      .chart-stats strong {
+        color: var(--text);
+      }
+      .chart-canvas {
+        width: 100%;
+        height: 84px;
+        display: block;
+        border-radius: 8px;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.03), rgba(15, 23, 42, 0.01));
+      }
       .log {
         min-height: 160px;
-        max-height: 260px;
+        max-height: 280px;
         overflow: auto;
         white-space: pre-wrap;
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -147,69 +266,123 @@
         background: #111827;
         color: #e5e7eb;
       }
+      .wall {
+        min-height: calc(100vh - 104px);
+      }
+      .panel--compact {
+        padding-top: 10px;
+        padding-bottom: 10px;
+      }
       @media (max-width: 900px) {
         .grid {
           grid-template-columns: 1fr;
+        }
+        .wall {
+          min-height: auto;
+        }
+        .metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <section class="panel" style="display:grid; gap:12px;">
+      <section class="panel panel--compact" style="display:grid; gap:8px;">
         <div class="toolbar">
           <span class="badge">Direct WHEP</span>
           <span class="badge" id="buildBadge">Build --</span>
-          <h1>四路直连播放</h1>
-        </div>
-        <p class="subtle">只做四路 WHEP 直连，不走房间、不注入 TURN、不做 relay 预设。切换时会重新创建 WHEP 会话。</p>
-        <div class="actions">
-          <button class="primary" id="startAllBtn">全部连接</button>
-          <button id="stopAllBtn">全部停止</button>
+          <div class="hero-copy">
+            <h1>四路直连播放</h1>
+            <p class="subtle">只做 WHEP 直连，首屏同时观察四路视频、ORTM 和趋势。</p>
+          </div>
+          <div class="toolbar-spacer"></div>
+          <div class="actions">
+            <button class="primary" id="startAllBtn">全部连接</button>
+            <button id="stopAllBtn">全部停止</button>
+          </div>
+          <button class="ghost" id="toggleLogBtn">日志</button>
         </div>
       </section>
 
-      <section class="grid" id="slots"></section>
+      <section class="grid wall" id="slots"></section>
 
-      <section class="panel">
-        <h2>日志</h2>
-        <div id="log" class="log"></div>
-      </section>
+      <details class="panel" id="logPanel">
+        <summary><strong>日志</strong></summary>
+        <div class="collapsible-body">
+          <div id="log" class="log"></div>
+        </div>
+      </details>
     </div>
 
     <template id="slotTemplate">
       <article class="slot">
         <div class="slot-head">
-          <div class="slot-title">
-            <strong class="name"></strong>
-            <span class="status">idle</span>
-          </div>
-          <label>
-            WHEP 地址
-            <input class="url" />
-          </label>
-          <div class="slot-actions">
-            <button class="primary start">连接</button>
-            <button class="stop">停止</button>
-          </div>
-          <div class="metrics">
-            <span>ICE: <strong class="ice">idle</strong></span>
-            <span>分辨率: <strong class="resolution">--</strong></span>
-            <span>ORTM: <strong class="latency-ortm">--</strong></span>
-            <span>净ORTM: <strong class="latency-ortm-net">--</strong></span>
-            <span>Fallback: <strong class="latency-fallback">--</strong></span>
-            <span>前段: <strong class="latency-upstream">--</strong></span>
-            <span>净前段: <strong class="latency-upstream-net">--</strong></span>
-            <span>浏览器: <strong class="browser-cost">--</strong></span>
+          <div class="slot-topbar">
+            <div class="slot-title">
+              <strong class="name"></strong>
+              <span class="status">idle</span>
+            </div>
+            <div class="slot-actions">
+              <button class="primary start">连接</button>
+              <button class="stop">停止</button>
+              <details class="details-inline">
+                <summary>设置</summary>
+                <div class="collapsible-body slot-config">
+                  <label>
+                    WHEP 地址
+                    <input class="url" />
+                  </label>
+                </div>
+              </details>
+            </div>
           </div>
         </div>
-        <video autoplay playsinline controls muted></video>
+        <div class="slot-media">
+          <video autoplay playsinline controls muted></video>
+        </div>
+        <div class="slot-footer">
+          <div class="metrics">
+            <div class="metric">
+              <span class="metric-label">ICE</span>
+              <strong class="metric-value ice">idle</strong>
+              <span class="metric-sub">分辨率 <strong class="resolution">--</strong></span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">ORTM</span>
+              <strong class="metric-value latency-ortm">--</strong>
+              <span class="metric-sub">净ORTM <strong class="latency-ortm-net">--</strong></span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">前段</span>
+              <strong class="metric-value latency-upstream">--</strong>
+              <span class="metric-sub">净前段 <strong class="latency-upstream-net">--</strong></span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">播放侧</span>
+              <strong class="metric-value latency-fallback">--</strong>
+              <span class="metric-sub">浏览器 <strong class="browser-cost">--</strong></span>
+            </div>
+          </div>
+          <div class="chart-panel">
+            <div class="chart-head">
+              <strong>ORTM 趋势</strong>
+              <div class="chart-stats">
+                <span>当前 <strong class="chart-current">--</strong></span>
+                <span>10s 均值 <strong class="chart-avg">--</strong></span>
+                <span>窗口峰值 <strong class="chart-max">--</strong></span>
+              </div>
+            </div>
+            <canvas class="chart-canvas latency-chart" width="640" height="160"></canvas>
+          </div>
+        </div>
       </article>
     </template>
 
     <script>
-      const BUILD_VERSION = '2026-07-09-ortm-v0-player-10';
+      const BUILD_VERSION = '2026-07-09-whep-quad-direct-11';
       const logEl = document.getElementById('log');
+      const logPanelEl = document.getElementById('logPanel');
       const slotsEl = document.getElementById('slots');
       const template = document.getElementById('slotTemplate');
       const buildBadgeEl = document.getElementById('buildBadge');
@@ -239,6 +412,8 @@
       const ORTM_MAX_REASONABLE_LATENCY_MS = 5000;
       const ORTM_DECODE_INTERVAL_MS = 500;
       const ORTM_DECODE_MODE = 'rvfc';
+      const CHART_WINDOW_MS = 60000;
+      const CHART_AVG_WINDOW_MS = 10000;
 
       function log(message) {
         const line = `${new Date().toISOString()} ${message}`;
@@ -529,6 +704,10 @@
         });
       }
 
+      function formatMetric(value) {
+        return Number.isFinite(value) ? `${Math.round(value)} ms` : '--';
+      }
+
       function makeSlot(name, urlValue) {
         const node = template.content.firstElementChild.cloneNode(true);
         const nameEl = node.querySelector('.name');
@@ -544,6 +723,10 @@
         const upstreamLatencyEl = node.querySelector('.latency-upstream');
         const upstreamNetLatencyEl = node.querySelector('.latency-upstream-net');
         const browserCostEl = node.querySelector('.browser-cost');
+        const chartCurrentEl = node.querySelector('.chart-current');
+        const chartAvgEl = node.querySelector('.chart-avg');
+        const chartMaxEl = node.querySelector('.chart-max');
+        const chartCanvasEl = node.querySelector('.latency-chart');
         const videoEl = node.querySelector('video');
 
         nameEl.textContent = name;
@@ -564,6 +747,9 @@
           ortmLastFailureReason: null,
           ortmLastLoggedFrameSeq: null,
           lastMetricLogLine: null,
+          lastChartSampleAt: 0,
+          chartPoints: [],
+          chartCtx: null,
           browserPerf: {
             count: 0,
             drawMsTotal: 0,
@@ -572,6 +758,7 @@
           },
         };
         state.decodeCtx = state.decodeCanvas.getContext('2d', { willReadFrequently: true });
+        state.chartCtx = chartCanvasEl.getContext('2d');
 
         function setStatus(text) {
           statusEl.textContent = text;
@@ -580,6 +767,95 @@
         function parseMetricMs(text) {
           const match = String(text || '').match(/(\d+(?:\.\d+)?)/);
           return match ? Number(match[1]) : NaN;
+        }
+
+        function pruneChartPoints(now = performance.now()) {
+          state.chartPoints = state.chartPoints.filter((point) => now - point.t <= CHART_WINDOW_MS);
+        }
+
+        function renderChart() {
+          const ctx = state.chartCtx;
+          if (!ctx) return;
+
+          const dpr = window.devicePixelRatio || 1;
+          const cssWidth = Math.max(120, chartCanvasEl.clientWidth || 320);
+          const cssHeight = Math.max(72, chartCanvasEl.clientHeight || 84);
+          const width = Math.round(cssWidth * dpr);
+          const height = Math.round(cssHeight * dpr);
+          if (chartCanvasEl.width !== width || chartCanvasEl.height !== height) {
+            chartCanvasEl.width = width;
+            chartCanvasEl.height = height;
+          }
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.clearRect(0, 0, width, height);
+          ctx.scale(dpr, dpr);
+          ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+          const now = performance.now();
+          pruneChartPoints(now);
+          const points = state.chartPoints;
+          if (!points.length) {
+            chartCurrentEl.textContent = '--';
+            chartAvgEl.textContent = '--';
+            chartMaxEl.textContent = '--';
+            return;
+          }
+
+          const current = points[points.length - 1].v;
+          const recent = points.filter((point) => now - point.t <= CHART_AVG_WINDOW_MS);
+          const avg = recent.length ? recent.reduce((sum, point) => sum + point.v, 0) / recent.length : current;
+          const max = points.reduce((best, point) => Math.max(best, point.v), points[0].v);
+          chartCurrentEl.textContent = formatMetric(current);
+          chartAvgEl.textContent = formatMetric(avg);
+          chartMaxEl.textContent = formatMetric(max);
+
+          const topPad = 8;
+          const bottomPad = 14;
+          const leftPad = 4;
+          const rightPad = 4;
+          const chartWidth = cssWidth - leftPad - rightPad;
+          const chartHeight = cssHeight - topPad - bottomPad;
+          const yMax = Math.max(100, Math.ceil((max + 20) / 50) * 50);
+
+          ctx.strokeStyle = 'rgba(100, 116, 139, 0.25)';
+          ctx.lineWidth = 1;
+          [50, 100, 200].forEach((value) => {
+            if (value >= yMax) return;
+            const y = topPad + chartHeight - (value / yMax) * chartHeight;
+            ctx.beginPath();
+            ctx.moveTo(leftPad, y);
+            ctx.lineTo(leftPad + chartWidth, y);
+            ctx.stroke();
+          });
+
+          ctx.strokeStyle = '#0f766e';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          points.forEach((point, index) => {
+            const x = leftPad + ((point.t - (now - CHART_WINDOW_MS)) / CHART_WINDOW_MS) * chartWidth;
+            const y = topPad + chartHeight - (Math.min(point.v, yMax) / yMax) * chartHeight;
+            if (index === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+
+          ctx.fillStyle = '#0f766e';
+          const lastPoint = points[points.length - 1];
+          const lastX = leftPad + ((lastPoint.t - (now - CHART_WINDOW_MS)) / CHART_WINDOW_MS) * chartWidth;
+          const lastY = topPad + chartHeight - (Math.min(lastPoint.v, yMax) / yMax) * chartHeight;
+          ctx.beginPath();
+          ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        function pushChartSample(value) {
+          if (!Number.isFinite(value)) return;
+          const now = performance.now();
+          if (now - state.lastChartSampleAt < 250) return;
+          state.lastChartSampleAt = now;
+          state.chartPoints.push({ t: now, v: value });
+          pruneChartPoints(now);
+          renderChart();
         }
 
         function updateDerivedLatency() {
@@ -652,6 +928,8 @@
           state.ortmLastLoggedFrameSeq = null;
           state.lastMetricLogLine = null;
           state.decodeMode = ORTM_DECODE_MODE;
+          state.lastChartSampleAt = 0;
+          state.chartPoints = [];
           state.browserPerf = {
             count: 0,
             drawMsTotal: 0,
@@ -663,6 +941,7 @@
           upstreamLatencyEl.textContent = '--';
           upstreamNetLatencyEl.textContent = '--';
           browserCostEl.textContent = '--';
+          renderChart();
         }
 
         function updateLatencyFromOrtm() {
@@ -701,6 +980,7 @@
             state.ortmLastSuccessAt = performance.now();
             state.ortmLastResult = result;
             ortmLatencyEl.textContent = `${Math.round(result.latency_ms)} ms`;
+            pushChartSample(result.latency_ms);
             updateDerivedLatency();
             const shouldLogSuccess =
               state.ortmLastLoggedFrameSeq == null ||
@@ -788,6 +1068,7 @@
           browserCostEl.textContent = '--';
           state.lastMetricLogLine = null;
           setStatus('stopped');
+          renderChart();
           emitMetricLog();
         }
 
@@ -918,6 +1199,7 @@
                 if (Number.isFinite(directMs) && directMs >= 0 && directMs < 60000) {
                   fallbackLatencyEl.textContent = `${directMs.toFixed(0)} ms`;
                   updateDerivedLatency();
+                  emitMetricLog();
                   return;
                 }
               }
@@ -950,7 +1232,7 @@
           stop().catch((error) => log(`${name} stop failed: ${error.message}`));
         });
 
-        return { node, start, stop };
+        return { node, start, stop, renderChart };
       }
 
       const slots = [
@@ -980,6 +1262,18 @@
             log(`stop all failed: ${error.message}`);
           }
         }
+      });
+
+      document.getElementById('toggleLogBtn')?.addEventListener('click', () => {
+        logPanelEl.open = !logPanelEl.open;
+      });
+
+      window.addEventListener('resize', () => {
+        slots.forEach((slot) => {
+          if (typeof slot.renderChart === 'function') {
+            slot.renderChart();
+          }
+        });
       });
 
       log('quad direct viewer ready');
