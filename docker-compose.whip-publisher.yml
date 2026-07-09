@@ -1,19 +1,42 @@
 services:
+  whip_publisher_base:
+    profiles:
+      - build
+    build:
+      context: ./docker/whip-publisher
+      dockerfile: Dockerfile.base
+      args:
+        UBUNTU_VERSION: "${WHIP_UBUNTU_VERSION:-24.04}"
+        GST_PLUGINS_RS_REF: "${WHIP_GST_PLUGINS_RS_REF:-0.14.1}"
+        BASE_IMAGE: "${WHIP_BASE_IMAGE:-docker.1ms.run/library/ubuntu:${WHIP_UBUNTU_VERSION:-24.04}}"
+    image: "${WHIP_PUBLISHER_BASE_IMAGE:-tunnel-whip-publisher-base:ubuntu24.04-gst-rs-0.14.1}"
+
   fish_front_whip:
     build:
       context: ./docker/whip-publisher
+      dockerfile: Dockerfile
+      args:
+        UBUNTU_VERSION: "${WHIP_UBUNTU_VERSION:-24.04}"
+        GST_PLUGINS_RS_REF: "${WHIP_GST_PLUGINS_RS_REF:-0.14.1}"
+        PUBLISHER_BASE_IMAGE: "${WHIP_PUBLISHER_BASE_IMAGE:-tunnel-whip-publisher-base:ubuntu24.04-gst-rs-0.14.1}"
     image: tunnel-whip-publisher:local
     environment:
       STREAM_NAME: fish_front
       DEVICE_ID: "${DEVICE_ID:?DEVICE_ID is required}"
       WHIP_BASE_URL: "${WHIP_BASE_URL:-https://media-proxy.nexusdot.cn/noproxy}"
+      WHIP_INCLUDE_DEVICE: "${WHIP_INCLUDE_DEVICE:-0}"
       WIDTH: "${WIDTH:-1280}"
       HEIGHT: "${HEIGHT:-720}"
       FPS: "${FPS:-30}"
-      BITRATE_KBPS: "${BITRATE_KBPS:-8000}"
+      BITRATE_KBPS: "${BITRATE_KBPS:-3000}"
       KEY_INT_MAX: "${KEY_INT_MAX:-60}"
       PATTERN: "${PATTERN:-smpte}"
       SPEED_PRESET: "${SPEED_PRESET:-ultrafast}"
+      TIMESTAMP_OVERLAY: "${TIMESTAMP_OVERLAY:-1}"
+      TIMESTAMP_FONT: "${TIMESTAMP_FONT:-Sans 22}"
+      TIMESTAMP_XPAD: "${TIMESTAMP_XPAD:-12}"
+      TIMESTAMP_YPAD: "${TIMESTAMP_YPAD:-10}"
+      TIMESTAMP_TZ: "${TIMESTAMP_TZ:-Asia/Shanghai}"
       GST_DEBUG_LEVEL: "${GST_DEBUG_LEVEL:-2}"
       GST_DEBUG: "${GST_DEBUG:-}"
       GST_DEBUG_NO_COLOR: "${GST_DEBUG_NO_COLOR:-0}"
@@ -33,13 +56,19 @@ services:
       STREAM_NAME: fish_back
       DEVICE_ID: "${DEVICE_ID:?DEVICE_ID is required}"
       WHIP_BASE_URL: "${WHIP_BASE_URL:-https://media-proxy.nexusdot.cn/noproxy}"
+      WHIP_INCLUDE_DEVICE: "${WHIP_INCLUDE_DEVICE:-0}"
       WIDTH: "${WIDTH:-1280}"
       HEIGHT: "${HEIGHT:-720}"
       FPS: "${FPS:-30}"
-      BITRATE_KBPS: "${BITRATE_KBPS:-8000}"
+      BITRATE_KBPS: "${BITRATE_KBPS:-3000}"
       KEY_INT_MAX: "${KEY_INT_MAX:-60}"
       PATTERN: "${PATTERN:-smpte}"
       SPEED_PRESET: "${SPEED_PRESET:-ultrafast}"
+      TIMESTAMP_OVERLAY: "${TIMESTAMP_OVERLAY:-1}"
+      TIMESTAMP_FONT: "${TIMESTAMP_FONT:-Sans 22}"
+      TIMESTAMP_XPAD: "${TIMESTAMP_XPAD:-12}"
+      TIMESTAMP_YPAD: "${TIMESTAMP_YPAD:-10}"
+      TIMESTAMP_TZ: "${TIMESTAMP_TZ:-Asia/Shanghai}"
       GST_DEBUG_LEVEL: "${GST_DEBUG_LEVEL:-2}"
       GST_DEBUG: "${GST_DEBUG:-}"
       GST_DEBUG_NO_COLOR: "${GST_DEBUG_NO_COLOR:-0}"
@@ -51,6 +80,38 @@ services:
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped
 
+  fish_front_remote_whip:
+    image: tunnel-whip-publisher:local
+    environment:
+      STREAM_NAME: fish_front
+      DEVICE_ID: "${DEVICE_ID:?DEVICE_ID is required}"
+      WHIP_BASE_URL: "${WHIP_REMOTE_BASE_URL:-https://media-proxy.nexusdot.cn/noproxy}"
+      WHIP_INCLUDE_DEVICE: "${WHIP_REMOTE_INCLUDE_DEVICE:-1}"
+      WIDTH: "${WIDTH:-1280}"
+      HEIGHT: "${HEIGHT:-720}"
+      FPS: "${FPS:-30}"
+      BITRATE_KBPS: "${BITRATE_KBPS:-3000}"
+      KEY_INT_MAX: "${KEY_INT_MAX:-60}"
+      PATTERN: "${PATTERN:-smpte}"
+      SPEED_PRESET: "${SPEED_PRESET:-ultrafast}"
+      TIMESTAMP_OVERLAY: "${TIMESTAMP_OVERLAY:-1}"
+      TIMESTAMP_FONT: "${TIMESTAMP_FONT:-Sans 22}"
+      TIMESTAMP_XPAD: "${TIMESTAMP_XPAD:-12}"
+      TIMESTAMP_YPAD: "${TIMESTAMP_YPAD:-10}"
+      TIMESTAMP_TZ: "${TIMESTAMP_TZ:-Asia/Shanghai}"
+      GST_DEBUG_LEVEL: "${GST_DEBUG_LEVEL:-2}"
+      GST_DEBUG: "${GST_DEBUG:-}"
+      GST_DEBUG_NO_COLOR: "${GST_DEBUG_NO_COLOR:-0}"
+      WHIP_STUN_SERVER: "${WHIP_REMOTE_STUN_SERVER:-${WHIP_STUN_SERVER:-}}"
+      WHIP_TURN_SERVER: "${WHIP_REMOTE_TURN_SERVER:-${WHIP_TURN_SERVER:-}}"
+      WHIP_TURN_SERVER_2: "${WHIP_REMOTE_TURN_SERVER_2:-${WHIP_TURN_SERVER_2:-}}"
+      WHIP_FORCE_TURN: "${WHIP_REMOTE_FORCE_TURN:-${WHIP_FORCE_TURN:-0}}"
+      WHIP_SINK_EXTRA_ARGS: "${WHIP_REMOTE_SINK_EXTRA_ARGS:-${WHIP_SINK_EXTRA_ARGS:-}}"
+      PIPELINE_METRICS: "${PIPELINE_METRICS:-1}"
+      PIPELINE_METRICS_INTERVAL_FRAMES: "${PIPELINE_METRICS_INTERVAL_FRAMES:-30}"
+      X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
+    restart: unless-stopped
+
   fish_left_whip:
     image: tunnel-whip-publisher:local
     depends_on:
@@ -59,13 +120,19 @@ services:
       STREAM_NAME: fish_left
       DEVICE_ID: "${DEVICE_ID:?DEVICE_ID is required}"
       WHIP_BASE_URL: "${WHIP_BASE_URL:-https://media-proxy.nexusdot.cn/noproxy}"
+      WHIP_INCLUDE_DEVICE: "${WHIP_INCLUDE_DEVICE:-0}"
       WIDTH: "${WIDTH:-1280}"
       HEIGHT: "${HEIGHT:-720}"
       FPS: "${FPS:-30}"
-      BITRATE_KBPS: "${BITRATE_KBPS:-8000}"
+      BITRATE_KBPS: "${BITRATE_KBPS:-3000}"
       KEY_INT_MAX: "${KEY_INT_MAX:-60}"
       PATTERN: "${PATTERN:-smpte}"
       SPEED_PRESET: "${SPEED_PRESET:-ultrafast}"
+      TIMESTAMP_OVERLAY: "${TIMESTAMP_OVERLAY:-1}"
+      TIMESTAMP_FONT: "${TIMESTAMP_FONT:-Sans 22}"
+      TIMESTAMP_XPAD: "${TIMESTAMP_XPAD:-12}"
+      TIMESTAMP_YPAD: "${TIMESTAMP_YPAD:-10}"
+      TIMESTAMP_TZ: "${TIMESTAMP_TZ:-Asia/Shanghai}"
       GST_DEBUG_LEVEL: "${GST_DEBUG_LEVEL:-2}"
       GST_DEBUG: "${GST_DEBUG:-}"
       GST_DEBUG_NO_COLOR: "${GST_DEBUG_NO_COLOR:-0}"
@@ -85,13 +152,19 @@ services:
       STREAM_NAME: fish_right
       DEVICE_ID: "${DEVICE_ID:?DEVICE_ID is required}"
       WHIP_BASE_URL: "${WHIP_BASE_URL:-https://media-proxy.nexusdot.cn/noproxy}"
+      WHIP_INCLUDE_DEVICE: "${WHIP_INCLUDE_DEVICE:-0}"
       WIDTH: "${WIDTH:-1280}"
       HEIGHT: "${HEIGHT:-720}"
       FPS: "${FPS:-30}"
-      BITRATE_KBPS: "${BITRATE_KBPS:-8000}"
+      BITRATE_KBPS: "${BITRATE_KBPS:-3000}"
       KEY_INT_MAX: "${KEY_INT_MAX:-60}"
       PATTERN: "${PATTERN:-smpte}"
       SPEED_PRESET: "${SPEED_PRESET:-ultrafast}"
+      TIMESTAMP_OVERLAY: "${TIMESTAMP_OVERLAY:-1}"
+      TIMESTAMP_FONT: "${TIMESTAMP_FONT:-Sans 22}"
+      TIMESTAMP_XPAD: "${TIMESTAMP_XPAD:-12}"
+      TIMESTAMP_YPAD: "${TIMESTAMP_YPAD:-10}"
+      TIMESTAMP_TZ: "${TIMESTAMP_TZ:-Asia/Shanghai}"
       GST_DEBUG_LEVEL: "${GST_DEBUG_LEVEL:-2}"
       GST_DEBUG: "${GST_DEBUG:-}"
       GST_DEBUG_NO_COLOR: "${GST_DEBUG_NO_COLOR:-0}"

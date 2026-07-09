@@ -111,7 +111,7 @@
           这是一个最小 WHEP 播放页。它不会使用当前项目的自定义 WebSocket signaling，而是直接对接标准 WHEP endpoint。
         </p>
         <p class="hint">
-          如果你的 WHEP 服务端没有内置 ICE 配置，可以直接复用当前项目通过 <code>/config.js</code> 注入的 TURN 默认值。
+          这个页面默认不注入任何 TURN，优先验证浏览器与 WHEP 服务端是否能直接建立 WebRTC 链路。
         </p>
       </section>
 
@@ -119,7 +119,7 @@
         <div class="grid">
           <label>
             WHEP 地址
-            <input id="whepUrl" value="http://localhost:8889/demo-stream/whep" />
+            <input id="whepUrl" value="/online/whep" />
           </label>
           <label>
             Bearer Token（可选）
@@ -197,12 +197,24 @@
         }];
       }
 
+      function buildSameOriginWhepUrl() {
+        return `${window.location.origin}/online/whep`;
+      }
+
       function applyDefaults() {
-        const defaultWhepUrl = appConfig.defaultWhepUrl || 'http://localhost:8889/demo-stream/whep';
-        whepUrlInput.value = defaultWhepUrl;
-        iceUrlsInput.value = (appConfig.defaultTurnUrls || []).join('\n');
-        turnUsernameInput.value = appConfig.defaultTurnUsername || '';
-        turnCredentialInput.value = appConfig.defaultTurnCredential || '';
+        const configuredWhepUrl = appConfig.defaultWhepUrl || '';
+        const currentOriginWhepUrl = buildSameOriginWhepUrl();
+        const shouldPreferCurrentOrigin =
+          !configuredWhepUrl ||
+          window.location.protocol === 'https:' ||
+          configuredWhepUrl.includes('.ts.net/');
+
+        whepUrlInput.value = shouldPreferCurrentOrigin ? currentOriginWhepUrl : configuredWhepUrl;
+        iceUrlsInput.value = '';
+        turnUsernameInput.value = '';
+        turnCredentialInput.value = '';
+        log(`player ready, default whep url=${whepUrlInput.value}`);
+        log('default ICE mode=direct (no TURN preset loaded)');
       }
 
       function waitForIceGatheringComplete(connection) {
@@ -303,6 +315,14 @@
         await stopPlayback();
         log('playback stopped');
       };
+
+      window.addEventListener('error', (event) => {
+        log(`window error: ${event.message}`);
+      });
+
+      window.addEventListener('unhandledrejection', (event) => {
+        log(`unhandled rejection: ${event.reason?.message || event.reason || 'unknown'}`);
+      });
 
       applyDefaults();
     </script>

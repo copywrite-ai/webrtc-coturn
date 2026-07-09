@@ -5,7 +5,7 @@ api: true
 apiAddress: :9997
 
 hls: false
-rtsp: false
+rtsp: true
 rtmp: false
 srt: false
 moq: false
@@ -19,17 +19,20 @@ webrtcLocalTCPAddress: ""
 webrtcIPsFromInterfaces: false
 webrtcIPsFromInterfacesList: []
 webrtcAdditionalHosts:
-  - media.example.com
+  - 127.0.0.1
+  - peng-mbp14.li-adder.ts.net
 
 # MediaMTX also needs TURN on the server side; browser-only ICE config is not enough for WHEP.
-# Replace these placeholders with real short-lived TURN credentials in your own deployment.
+# These values should match the TURN service actually used by the demo web app.
 webrtcICEServers2:
-  - url: turn:turn.example.com:3478?transport=udp
-    username: REPLACE_WITH_TEMPORARY_TURN_USERNAME
-    password: REPLACE_WITH_TEMPORARY_TURN_CREDENTIAL
-  - url: turn:turn.example.com:3478?transport=tcp
-    username: REPLACE_WITH_TEMPORARY_TURN_USERNAME
-    password: REPLACE_WITH_TEMPORARY_TURN_CREDENTIAL
+  - url: turn:47.102.106.162:3478?transport=udp
+    username: AUTH_SECRET
+    password: be331ba315bf4b5484fc92a9514be0d7fca40df62d8bb1295946c4a6682781c0
+    clientOnly: false
+  - url: turn:47.102.106.162:3478?transport=tcp
+    username: AUTH_SECRET
+    password: be331ba315bf4b5484fc92a9514be0d7fca40df62d8bb1295946c4a6682781c0
+    clientOnly: false
 
 pathDefaults:
   source: publisher
@@ -39,4 +42,12 @@ pathDefaults:
     - codec: H264
 
 paths:
-  demo-stream: {}
+  online: {}
+  fish_front: {}
+  fish_back: {}
+  fish_left: {}
+  fish_right: {}
+  "peng-mbp14/fish_front": {}
+  "peng-mbp14/fish_back": {}
+  "peng-mbp14/fish_left": {}
+  "peng-mbp14/fish_right": {}

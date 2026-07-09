@@ -116,7 +116,7 @@
         <div class="grid">
           <label>
             WHIP 地址
-            <input id="whipUrl" value="http://localhost:8889/demo-stream/whip" />
+            <input id="whipUrl" value="/online/whip" />
           </label>
           <label>
             Bearer Token（可选）
@@ -220,6 +220,15 @@
         });
       }
 
+      function resolveRequestUrl(value) {
+        return new URL(String(value || '').trim(), location.href).toString();
+      }
+
+      function resolveSessionUrl(locationHeader, requestUrl) {
+        if (!locationHeader) return null;
+        return new URL(locationHeader, resolveRequestUrl(requestUrl)).toString();
+      }
+
       async function getLocalStream() {
         if (sourceModeSelect.value === 'screen') {
           return navigator.mediaDevices.getDisplayMedia({
@@ -238,7 +247,7 @@
       }
 
       function applyDefaults() {
-        whipUrlInput.value = appConfig.defaultWhipUrl || 'http://localhost:8889/demo-stream/whip';
+        whipUrlInput.value = appConfig.defaultWhipUrl || '/online/whip';
         iceUrlsInput.value = (appConfig.defaultTurnUrls || []).join('\n');
         turnUsernameInput.value = appConfig.defaultTurnUsername || '';
         turnCredentialInput.value = appConfig.defaultTurnCredential || '';
@@ -308,7 +317,7 @@
 
         const answerSdp = await response.text();
         const location = response.headers.get('Location');
-        sessionUrl = location ? new URL(location, whipUrlInput.value.trim()).toString() : null;
+        sessionUrl = resolveSessionUrl(location, whipUrlInput.value.trim());
         if (sessionUrl) {
           log(`session created: ${sessionUrl}`);
         }

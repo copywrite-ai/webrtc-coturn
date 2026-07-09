@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WHEP Viewer v4</title>
+    <style>
+      :root {
+        --bg: #f5f7fb;
+        --panel: #ffffff;
+        --line: rgba(15, 23, 42, 0.12);
+        --text: #0f172a;
+        --muted: #64748b;
+        --accent: #0f766e;
+        --danger: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(15, 118, 110, 0.10), transparent 30%),
+          linear-gradient(180deg, #f8fafc 0%, var(--bg) 100%);
+        font-family: "SF Pro Display", "PingFang SC", sans-serif;
+      }
+      .wrap {
+        width: min(980px, calc(100% - 24px));
+        margin: 24px auto 40px;
+        display: grid;
+        gap: 16px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 18px;
+      }
+      h1, h2, p {
+        margin: 0;
+      }
+      .stack {
+        display: grid;
+        gap: 10px;
+      }
+      .grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: 1fr 1fr;
+      }
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      input, textarea, button {
+        font: inherit;
+      }
+      input, textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px 12px;
+      }
+      textarea {
+        min-height: 84px;
+        resize: vertical;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 14px;
+        cursor: pointer;
+        background: #dbeafe;
+      }
+      button.primary {
+        background: var(--accent);
+        color: white;
+      }
+      .badge {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        border-radius: 999px;
+        padding: 4px 10px;
+        background: #ecfeff;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      video {
+        width: 100%;
+        min-height: 360px;
+        border-radius: 16px;
+        background: #0f172a;
+      }
+      .status {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      .stat {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px;
+        background: #f8fafc;
+      }
+      .stat .k {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .stat .v {
+        margin-top: 4px;
+        font-weight: 600;
+      }
+      .diag {
+        border-left: 4px solid var(--accent);
+        padding: 10px 12px;
+        background: #f8fafc;
+        border-radius: 12px;
+      }
+      .diag[data-level="error"] {
+        border-left-color: var(--danger);
+      }
+      .log {
+        min-height: 180px;
+        max-height: 300px;
+        overflow: auto;
+        white-space: pre-wrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        padding: 12px;
+        border-radius: 14px;
+        background: #111827;
+        color: #e5e7eb;
+      }
+      @media (max-width: 760px) {
+        .grid, .status {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="panel stack">
+        <span class="badge">v4 Minimal Viewer</span>
+        <h1>本地 WHEP 观看页</h1>
+        <p>这个版本只做一件事：从本地 MediaMTX 拉 `online`。不走 `v3` 的房间信令、别名回填、地址缓存。</p>
+      </section>
+
+      <section class="panel stack">
+        <div class="grid">
+          <label>
+            WHEP 地址
+            <input id="whepUrl" value="/online/whep" />
+          </label>
+          <label>
+            Bearer Token（可选）
+            <input id="bearerToken" placeholder="optional bearer token" />
+          </label>
+        </div>
+        <div class="grid">
+          <label>
+            ICE / TURN 地址（每行一个，可选）
+            <textarea id="iceUrls" placeholder="turn:turn.example.com:3478?transport=udp&#10;turn:turn.example.com:3478?transport=tcp"></textarea>
+          </label>
+          <div class="stack">
+            <label>
+              Username（可选）
+              <input id="turnUsername" placeholder="temporary username" />
+            </label>
+            <label>
+              Credential（可选）
+              <input id="turnCredential" placeholder="temporary credential" />
+            </label>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="startBtn">开始播放</button>
+          <button id="stopBtn">停止</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <video id="video" autoplay playsinline controls muted></video>
+      </section>
+
+      <section class="panel stack">
+        <div class="status">
+          <div class="stat"><div class="k">ICE</div><div class="v" id="iceState">idle</div></div>
+          <div class="stat"><div class="k">Candidate</div><div class="v" id="candidateState">unknown</div></div>
+          <div class="stat"><div class="k">Receive</div><div class="v" id="receiveResolution">unknown</div></div>
+          <div class="stat"><div class="k">Latency</div><div class="v" id="remoteLatency">--</div></div>
+        </div>
+        <div class="diag" id="diag" data-level="info">等待播放</div>
+      </section>
+
+      <section class="panel">
+        <h2>日志</h2>
+        <div id="log" class="log"></div>
+      </section>
+    </div>
+
+    <script src="/config.js"></script>
+    <script>
+      const appConfig = window.APP_CONFIG || {};
+      const whepUrlInput = document.getElementById('whepUrl');
+      const bearerTokenInput = document.getElementById('bearerToken');
+      const iceUrlsInput = document.getElementById('iceUrls');
+      const turnUsernameInput = document.getElementById('turnUsername');
+      const turnCredentialInput = document.getElementById('turnCredential');
+      const startBtn = document.getElementById('startBtn');
+      const stopBtn = document.getElementById('stopBtn');
+      const video = document.getElementById('video');
+      const logEl = document.getElementById('log');
+      const iceStateEl = document.getElementById('iceState');
+      const candidateStateEl = document.getElementById('candidateState');
+      const receiveResolutionEl = document.getElementById('receiveResolution');
+      const remoteLatencyEl = document.getElementById('remoteLatency');
+      const diagEl = document.getElementById('diag');
+
+      let pc = null;
+      let sessionUrl = null;
+      let polling = null;
+      let inboundState = {
+        prevJitterBufferDelay: null,
+        prevJitterBufferEmittedCount: null,
+      };
+
+      const params = new URLSearchParams(location.search);
+
+      function normalizeWhepUrl(rawValue) {
+        const value = String(rawValue || '').trim();
+        if (!value) return '';
+        if (/^https?:\/\/(localhost|127\.0\.0\.1)(:8889)?\/demo-stream\/whep$/i.test(value)) {
+          return '/online/whep';
+        }
+        if (/^https?:\/\/(localhost|127\.0\.0\.1)(:9001)?\/offline\/whep$/i.test(value)) {
+          return '/online/whep';
+        }
+        return value;
+      }
+
+      if (params.get('whep')) {
+        whepUrlInput.value = normalizeWhepUrl(params.get('whep'));
+      }
+
+      function buildSameOriginWhepUrl() {
+        return `${window.location.origin}/online/whep`;
+      }
+
+      function applyDefaults() {
+        if (params.get('whep')) {
+          return;
+        }
+        const configuredWhepUrl = normalizeWhepUrl(appConfig.defaultWhepUrl || '');
+        const currentOriginWhepUrl = buildSameOriginWhepUrl();
+        const shouldPreferCurrentOrigin =
+          !configuredWhepUrl ||
+          window.location.protocol === 'https:' ||
+          configuredWhepUrl.includes('.ts.net/');
+
+        whepUrlInput.value = shouldPreferCurrentOrigin ? currentOriginWhepUrl : configuredWhepUrl;
+      }
+
+      function log(message) {
+        const line = `${new Date().toISOString()} ${message}`;
+        logEl.textContent += `${line}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+        console.log(line);
+      }
+
+      function setDiag(level, message) {
+        diagEl.dataset.level = level;
+        diagEl.textContent = message;
+      }
+
+      function buildIceServers() {
+        const urls = iceUrlsInput.value
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean);
+        if (!urls.length) return [];
+        return [{
+          urls,
+          username: turnUsernameInput.value.trim(),
+          credential: turnCredentialInput.value.trim(),
+        }];
+      }
+
+      function resolveSessionUrl(locationHeader, requestUrl) {
+        if (!locationHeader) return null;
+        const baseUrl = new URL(requestUrl, window.location.href);
+        return new URL(locationHeader, baseUrl).toString();
+      }
+
+      function waitForIceGatheringComplete(connection, timeoutMs = 4000) {
+        if (connection.iceGatheringState === 'complete') {
+          return Promise.resolve('complete');
+        }
+        return new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            cleanup();
+            resolve('timeout');
+          }, timeoutMs);
+          const onStateChange = () => {
+            if (connection.iceGatheringState === 'complete') {
+              cleanup();
+              resolve('complete');
+            }
+          };
+          function cleanup() {
+            clearTimeout(timeout);
+            connection.removeEventListener('icegatheringstatechange', onStateChange);
+          }
+          connection.addEventListener('icegatheringstatechange', onStateChange);
+        });
+      }
+
+      function stopPolling() {
+        if (polling) {
+          clearInterval(polling);
+          polling = null;
+        }
+      }
+
+      async function deleteSession() {
+        if (!sessionUrl) return;
+        try {
+          await fetch(sessionUrl, { method: 'DELETE' });
+          log(`session deleted ${sessionUrl}`);
+        } catch (error) {
+          log(`session delete failed: ${error.message}`);
+        }
+        sessionUrl = null;
+      }
+
+      async function reset() {
+        stopPolling();
+        await deleteSession();
+        if (pc) {
+          pc.ontrack = null;
+          pc.onicecandidate = null;
+          pc.oniceconnectionstatechange = null;
+          pc.onconnectionstatechange = null;
+          pc.close();
+          pc = null;
+        }
+        video.srcObject = null;
+        iceStateEl.textContent = 'idle';
+        candidateStateEl.textContent = 'unknown';
+        receiveResolutionEl.textContent = 'unknown';
+        remoteLatencyEl.textContent = '--';
+        inboundState = {
+          prevJitterBufferDelay: null,
+          prevJitterBufferEmittedCount: null,
+        };
+      }
+
+      function computeLatencyMs(report) {
+        if (
+          !Number.isFinite(report.jitterBufferDelay) ||
+          !Number.isFinite(report.jitterBufferEmittedCount)
+        ) {
+          return null;
+        }
+        let latencyMs = null;
+        const totalDelay = report.jitterBufferDelay;
+        const totalEmitted = report.jitterBufferEmittedCount;
+        if (
+          Number.isFinite(inboundState.prevJitterBufferDelay) &&
+          Number.isFinite(inboundState.prevJitterBufferEmittedCount)
+        ) {
+          const deltaDelay = totalDelay - inboundState.prevJitterBufferDelay;
+          const deltaEmitted = totalEmitted - inboundState.prevJitterBufferEmittedCount;
+          if (deltaDelay >= 0 && deltaEmitted > 0) {
+            latencyMs = (deltaDelay / deltaEmitted) * 1000;
+          }
+        }
+        inboundState.prevJitterBufferDelay = totalDelay;
+        inboundState.prevJitterBufferEmittedCount = totalEmitted;
+        return latencyMs;
+      }
+
+      async function updateStats() {
+        if (!pc) return;
+        const stats = await pc.getStats();
+        let selectedPair = null;
+        let selectedPairId = null;
+        let inboundVideo = null;
+        stats.forEach((report) => {
+          if (report.type === 'transport' && report.selectedCandidatePairId) {
+            selectedPairId = report.selectedCandidatePairId;
+          }
+          if (!inboundVideo && report.type === 'inbound-rtp' && report.kind === 'video' && !report.isRemote) {
+            inboundVideo = report;
+          }
+        });
+        if (selectedPairId) {
+          selectedPair = stats.get(selectedPairId) || null;
+        }
+        stats.forEach((report) => {
+          if (!selectedPair && report.type === 'candidate-pair' && report.selected) {
+            selectedPair = report;
+          }
+        });
+        if (selectedPair) {
+          const localCandidate = stats.get(selectedPair.localCandidateId);
+          const remoteCandidate = stats.get(selectedPair.remoteCandidateId);
+          const localType = localCandidate?.candidateType || '-';
+          const remoteType = remoteCandidate?.candidateType || '-';
+          const protocol = localCandidate?.protocol || remoteCandidate?.protocol || '-';
+          const relay = localType === 'relay' || remoteType === 'relay';
+          candidateStateEl.textContent = `${relay ? 'relay' : 'direct'} / ${protocol} / ${localType}->${remoteType}`;
+        }
+        if (inboundVideo) {
+          const width = inboundVideo.frameWidth || inboundVideo.frameWidthDecoded || inboundVideo.frameWidthReceived;
+          const height = inboundVideo.frameHeight || inboundVideo.frameHeightDecoded || inboundVideo.frameHeightReceived;
+          if (width && height) {
+            receiveResolutionEl.textContent = `${width}x${height}`;
+          }
+          const latencyMs = computeLatencyMs(inboundVideo);
+          if (Number.isFinite(latencyMs)) {
+            remoteLatencyEl.textContent = `${Math.round(latencyMs)} ms`;
+          }
+        }
+      }
+
+      async function startPlayback() {
+        await reset();
+        const whepUrl = normalizeWhepUrl(whepUrlInput.value);
+        whepUrlInput.value = whepUrl;
+        if (!whepUrl) {
+          throw new Error('缺少 WHEP 地址');
+        }
+        pc = new RTCPeerConnection({
+          iceServers: buildIceServers(),
+          iceTransportPolicy: 'all',
+        });
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            log(`local candidate ${event.candidate.type || 'unknown'} ${event.candidate.protocol || '-'} ${event.candidate.address || '-'}:${event.candidate.port || '-'}`);
+          } else {
+            log('local candidate gathering complete');
+          }
+        };
+        pc.oniceconnectionstatechange = () => {
+          iceStateEl.textContent = pc.iceConnectionState;
+          log(`iceConnectionState=${pc.iceConnectionState}`);
+        };
+        pc.onconnectionstatechange = () => {
+          log(`connectionState=${pc.connectionState}`);
+        };
+        pc.ontrack = (event) => {
+          video.srcObject = event.streams[0];
+          setDiag('info', '已收到远端轨道，等待媒体解码');
+          log(`remote track received kind=${event.track.kind}`);
+        };
+
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true,
+        });
+        await pc.setLocalDescription(offer);
+        const gatherResult = await waitForIceGatheringComplete(pc);
+        log(`whep ICE gathering result=${gatherResult}`);
+
+        const headers = { 'Content-Type': 'application/sdp' };
+        if (bearerTokenInput.value.trim()) {
+          headers.Authorization = `Bearer ${bearerTokenInput.value.trim()}`;
+        }
+        const response = await fetch(whepUrl, {
+          method: 'POST',
+          headers,
+          body: pc.localDescription.sdp,
+        });
+        log(`whep response status=${response.status}`);
+        if (!response.ok) {
+          throw new Error(`WHEP request failed: ${response.status}`);
+        }
+        const answerSdp = await response.text();
+        sessionUrl = resolveSessionUrl(response.headers.get('Location'), whepUrl);
+        if (sessionUrl) {
+          log(`whep session created ${sessionUrl}`);
+        }
+        await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+        setDiag('info', 'WHEP 会话已建立，观察视频与 ICE 状态');
+        polling = setInterval(() => {
+          updateStats().catch((error) => log(`stats failed: ${error.message}`));
+        }, 1500);
+      }
+
+      startBtn.onclick = async () => {
+        try {
+          await startPlayback();
+        } catch (error) {
+          setDiag('error', `播放失败：${error.message}`);
+          log(`playback failed: ${error.message}`);
+        }
+      };
+      stopBtn.onclick = async () => {
+        await reset();
+        setDiag('info', '已停止');
+        log('playback stopped');
+      };
+
+      applyDefaults();
+      log(`viewer ready defaultWhep=${whepUrlInput.value}`);
+    </script>
+  </body>
+</html>

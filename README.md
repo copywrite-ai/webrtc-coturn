@@ -111,8 +111,8 @@ DEFAULT_TURN_URLS=turn:turn.example.com:3478?transport=udp,turn:turn.example.com
 DEFAULT_TURN_USERNAME=
 DEFAULT_TURN_CREDENTIAL=
 DEFAULT_SERVER_BANDWIDTH_MBPS=20
-DEFAULT_WHIP_URL=http://localhost:8889/demo-stream/whip
-DEFAULT_WHEP_URL=http://localhost:8889/demo-stream/whep
+DEFAULT_WHIP_URL=/online/whip
+DEFAULT_WHEP_URL=/online/whep
 DEFAULT_FORCE_RELAY=1
 DEFAULT_TURN_ONLY=1
 DEFAULT_AUTO_START=1
@@ -137,17 +137,36 @@ http://localhost:9001/whep-player.html
 Default local endpoints:
 
 ```text
-http://localhost:9001/mtx/demo-stream/whep
+http://localhost:9001/online/whip
+http://localhost:9001/online/whep
+```
+
+To validate a 10 Mbps WebRTC chain with a synthetic source, publish through WHIP and play back through WHEP:
+
+```bash
+./scripts/push-10m-whip-testsrc.sh
+```
+
+If your FFmpeg build lacks the `whip` muxer, the equivalent GStreamer path is:
+
+```bash
+./scripts/push-10m-whip-testsrc-gst.sh
+```
+
+Then open:
+
+```text
+http://localhost:9001/?v=4
 ```
 
 Suggested local verification flow:
 
 1. Open `/whep-player.html` on another browser or device.
 2. Keep the existing TURN values if your network needs relay.
-3. Start playback directly against the built-in `demo-stream`.
+3. Start playback directly against the `online` stream.
 
 The page reuses TURN defaults from `/config.js`, so an existing `coturn` deployment can stay unchanged.
-The web app reverse-proxies `/mtx/*` to the local MediaMTX service, so a single Tailscale Serve entry on `9001` is enough. When MediaMTX runs with host networking, the upstream from the web container should be `http://host.docker.internal:8889`.
+The web app reverse-proxies `/online/*` and `/mtx/*` to the local MediaMTX service, so a single Tailscale Serve entry on `9001` is enough.
 
 When using Docker Compose, Compose will automatically read `.env` if it exists.
 

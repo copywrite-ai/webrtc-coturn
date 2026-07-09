@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WHEP Quad Direct</title>
+    <style>
+      :root {
+        --bg: #eef2f7;
+        --panel: #ffffff;
+        --line: rgba(15, 23, 42, 0.12);
+        --text: #0f172a;
+        --muted: #64748b;
+        --accent: #0f766e;
+        --accent-soft: #ccfbf1;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "SF Pro Display", "PingFang SC", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(15, 118, 110, 0.10), transparent 28%),
+          linear-gradient(180deg, #f8fafc 0%, var(--bg) 100%);
+      }
+      .wrap {
+        width: min(1480px, calc(100% - 24px));
+        margin: 20px auto 32px;
+        display: grid;
+        gap: 16px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 16px;
+      }
+      .toolbar {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 4px 10px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      h1, p, h2 {
+        margin: 0;
+      }
+      .subtle {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      button, input {
+        font: inherit;
+      }
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 14px;
+        cursor: pointer;
+        background: #dbeafe;
+      }
+      button.primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .grid {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .slot {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        overflow: hidden;
+        background: #fff;
+      }
+      .slot-head {
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .slot-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .status {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      input {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+      }
+      video {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #0f172a;
+        display: block;
+      }
+      .slot-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .metrics {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .log {
+        min-height: 160px;
+        max-height: 260px;
+        overflow: auto;
+        white-space: pre-wrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        line-height: 1.45;
+        padding: 12px;
+        border-radius: 14px;
+        background: #111827;
+        color: #e5e7eb;
+      }
+      @media (max-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="panel" style="display:grid; gap:12px;">
+        <div class="toolbar">
+          <span class="badge">Direct WHEP</span>
+          <h1>四路直连播放</h1>
+        </div>
+        <p class="subtle">只做四路 WHEP 直连，不走房间、不注入 TURN、不做 relay 预设。切换时会重新创建 WHEP 会话。</p>
+        <div class="actions">
+          <button class="primary" id="startAllBtn">全部连接</button>
+          <button id="stopAllBtn">全部停止</button>
+        </div>
+      </section>
+
+      <section class="grid" id="slots"></section>
+
+      <section class="panel">
+        <h2>日志</h2>
+        <div id="log" class="log"></div>
+      </section>
+    </div>
+
+    <template id="slotTemplate">
+      <article class="slot">
+        <div class="slot-head">
+          <div class="slot-title">
+            <strong class="name"></strong>
+            <span class="status">idle</span>
+          </div>
+          <label>
+            WHEP 地址
+            <input class="url" />
+          </label>
+          <div class="slot-actions">
+            <button class="primary start">连接</button>
+            <button class="stop">停止</button>
+          </div>
+          <div class="metrics">
+            <span>ICE: <strong class="ice">idle</strong></span>
+            <span>分辨率: <strong class="resolution">--</strong></span>
+            <span>延迟: <strong class="latency">--</strong></span>
+          </div>
+        </div>
+        <video autoplay playsinline controls muted></video>
+      </article>
+    </template>
+
+    <script>
+      const logEl = document.getElementById('log');
+      const slotsEl = document.getElementById('slots');
+      const template = document.getElementById('slotTemplate');
+      const params = new URLSearchParams(location.search);
+
+      const defaultUrls = [
+        params.get('whep1') || '',
+        params.get('whep2') || '',
+        params.get('whep3') || '',
+        params.get('whep4') || '',
+      ];
+
+      function log(message) {
+        const line = `${new Date().toISOString()} ${message}`;
+        logEl.textContent += `${line}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+        console.log(line);
+      }
+
+      function absoluteUrl(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        return new URL(raw, window.location.href).toString();
+      }
+
+      function waitForIceGatheringComplete(pc) {
+        if (pc.iceGatheringState === 'complete') {
+          return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+          const handler = () => {
+            if (pc.iceGatheringState === 'complete') {
+              pc.removeEventListener('icegatheringstatechange', handler);
+              resolve();
+            }
+          };
+          pc.addEventListener('icegatheringstatechange', handler);
+        });
+      }
+
+      function makeSlot(name, urlValue) {
+        const node = template.content.firstElementChild.cloneNode(true);
+        const nameEl = node.querySelector('.name');
+        const statusEl = node.querySelector('.status');
+        const urlEl = node.querySelector('.url');
+        const startBtn = node.querySelector('.start');
+        const stopBtn = node.querySelector('.stop');
+        const iceEl = node.querySelector('.ice');
+        const resolutionEl = node.querySelector('.resolution');
+        const latencyEl = node.querySelector('.latency');
+        const videoEl = node.querySelector('video');
+
+        nameEl.textContent = name;
+        urlEl.value = absoluteUrl(urlValue);
+        urlEl.placeholder = 'http://127.0.0.1:9001/fish_front/whep';
+
+        const state = {
+          name,
+          pc: null,
+          sessionUrl: null,
+          statsTimer: null,
+        };
+
+        function setStatus(text) {
+          statusEl.textContent = text;
+        }
+
+        async function stop() {
+          if (state.statsTimer) {
+            clearInterval(state.statsTimer);
+            state.statsTimer = null;
+          }
+          if (state.sessionUrl) {
+            try {
+              await fetch(state.sessionUrl, { method: 'DELETE' });
+              log(`${name} deleted session ${state.sessionUrl}`);
+            } catch (error) {
+              log(`${name} delete session failed: ${error.message}`);
+            }
+          }
+          state.sessionUrl = null;
+          if (state.pc) {
+            state.pc.close();
+            state.pc = null;
+          }
+          videoEl.srcObject = null;
+          iceEl.textContent = 'idle';
+          resolutionEl.textContent = '--';
+          latencyEl.textContent = '--';
+          setStatus('stopped');
+        }
+
+        async function start() {
+          await stop();
+
+          const whepUrl = absoluteUrl(urlEl.value);
+          if (!whepUrl) {
+            setStatus('missing url');
+            return;
+          }
+
+          const pc = new RTCPeerConnection({ iceServers: [] });
+          state.pc = pc;
+          setStatus('connecting');
+          log(`${name} start url=${whepUrl}`);
+
+          pc.addTransceiver('video', { direction: 'recvonly' });
+
+          pc.ontrack = (event) => {
+            videoEl.srcObject = event.streams[0];
+            try {
+              if (event.receiver && 'playoutDelayHint' in event.receiver) {
+                event.receiver.playoutDelayHint = 0;
+                log(`${name} playoutDelayHint=0`);
+              }
+            } catch (error) {
+              log(`${name} playoutDelayHint failed: ${error.message}`);
+            }
+            setStatus('playing');
+            log(`${name} remote track received`);
+          };
+
+          pc.oniceconnectionstatechange = () => {
+            iceEl.textContent = pc.iceConnectionState;
+            log(`${name} ICE=${pc.iceConnectionState}`);
+          };
+
+          pc.onconnectionstatechange = () => {
+            log(`${name} PC=${pc.connectionState}`);
+          };
+
+          pc.onicegatheringstatechange = () => {
+            log(`${name} gathering=${pc.iceGatheringState}`);
+          };
+
+          pc.onsignalingstatechange = () => {
+            log(`${name} signaling=${pc.signalingState}`);
+          };
+
+          const offer = await pc.createOffer();
+          log(`${name} offer created`);
+          await pc.setLocalDescription(offer);
+          log(`${name} local description set`);
+          await waitForIceGatheringComplete(pc);
+          log(`${name} local ICE gathering complete`);
+
+          const localSdp = pc.localDescription?.sdp || '';
+          const localCandidates = Array.from(localSdp.matchAll(/^a=candidate:.*$/gm)).map((match) => match[0]);
+          log(`${name} local candidates=${localCandidates.length}`);
+          localCandidates.forEach((line, index) => log(`${name} local candidate[${index}] ${line}`));
+
+          const response = await fetch(whepUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/sdp',
+            },
+            body: pc.localDescription.sdp,
+          });
+
+          log(`${name} WHEP POST status=${response.status}`);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`WHEP request failed: ${response.status} body=${errorText.slice(0, 300)}`);
+          }
+
+          const location = response.headers.get('Location');
+          const answerSdp = await response.text();
+          const remoteCandidates = Array.from(answerSdp.matchAll(/^a=candidate:.*$/gm)).map((match) => match[0]);
+          log(`${name} remote location=${location || '<none>'}`);
+          log(`${name} remote candidates=${remoteCandidates.length}`);
+          remoteCandidates.forEach((line, index) => log(`${name} remote candidate[${index}] ${line}`));
+          state.sessionUrl = location ? new URL(location, whepUrl).toString() : null;
+          await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+          pc.getReceivers().forEach((receiver, index) => {
+            try {
+              if ('playoutDelayHint' in receiver) {
+                receiver.playoutDelayHint = 0;
+                log(`${name} receiver[${index}] playoutDelayHint=0`);
+              }
+            } catch (error) {
+              log(`${name} receiver[${index}] playoutDelayHint failed: ${error.message}`);
+            }
+          });
+          log(`${name} playback started url=${whepUrl}`);
+
+          state.statsTimer = setInterval(async () => {
+            if (!state.pc) return;
+            const tracks = videoEl.videoWidth && videoEl.videoHeight
+              ? `${videoEl.videoWidth}x${videoEl.videoHeight}`
+              : '--';
+            resolutionEl.textContent = tracks;
+            try {
+              const stats = await state.pc.getStats();
+              let inbound = null;
+              stats.forEach((report) => {
+                if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                  inbound = report;
+                }
+              });
+              if (
+                inbound &&
+                typeof inbound.estimatedPlayoutTimestamp === 'number' &&
+                typeof inbound.lastPacketReceivedTimestamp === 'number'
+              ) {
+                const directMs = inbound.estimatedPlayoutTimestamp - inbound.lastPacketReceivedTimestamp;
+                if (Number.isFinite(directMs) && directMs >= 0 && directMs < 60000) {
+                  latencyEl.textContent = `${directMs.toFixed(0)} ms`;
+                  return;
+                }
+              }
+              if (inbound && typeof inbound.jitterBufferDelay === 'number' && typeof inbound.jitterBufferEmittedCount === 'number' && inbound.jitterBufferEmittedCount > 0) {
+                const avgMs = inbound.jitterBufferDelay / inbound.jitterBufferEmittedCount * 1000;
+                latencyEl.textContent = `${avgMs.toFixed(0)} ms`;
+              } else {
+                latencyEl.textContent = '--';
+              }
+            } catch (error) {
+              latencyEl.textContent = 'err';
+            }
+          }, 1000);
+        }
+
+        startBtn.addEventListener('click', async () => {
+          try {
+            await start();
+          } catch (error) {
+            setStatus('error');
+            log(`${name} ${error.message}`);
+          }
+        });
+
+        stopBtn.addEventListener('click', () => {
+          stop().catch((error) => log(`${name} stop failed: ${error.message}`));
+        });
+
+        return { node, start, stop };
+      }
+
+      const slots = [
+        makeSlot('Front', defaultUrls[0]),
+        makeSlot('Back', defaultUrls[1]),
+        makeSlot('Left', defaultUrls[2]),
+        makeSlot('Right', defaultUrls[3]),
+      ];
+
+      slots.forEach((slot) => slotsEl.appendChild(slot.node));
+
+      document.getElementById('startAllBtn').addEventListener('click', async () => {
+        for (const slot of slots) {
+          try {
+            await slot.start();
+          } catch (error) {
+            log(`start all failed: ${error.message}`);
+          }
+        }
+      });
+
+      document.getElementById('stopAllBtn').addEventListener('click', async () => {
+        for (const slot of slots) {
+          try {
+            await slot.stop();
+          } catch (error) {
+            log(`stop all failed: ${error.message}`);
+          }
+        }
+      });
+
+      log('quad direct viewer ready');
+    </script>
+  </body>
+</html>

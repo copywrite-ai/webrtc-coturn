@@ -1,8 +1,9 @@
 import { createServer, request as httpRequest } from 'node:http';
 import { createHmac } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { appendFile, readFile } from 'node:fs/promises';
+import { request as httpsRequest } from 'node:https';
+import { extname, join, posix as pathPosix } from 'node:path';
 import { WebSocketServer } from 'ws';
 
 loadDotEnv();
@@ -10,6 +11,9 @@ loadDotEnv();
 const PORT = Number(process.env.PORT || 9001);
 const PUBLIC_DIR = join(process.cwd(), 'public');
 const MEDIAMTX_ORIGIN = process.env.MEDIAMTX_ORIGIN || 'http://127.0.0.1:8889';
+const MEDIAMTX_PATH_PREFIX = process.env.MEDIAMTX_PATH_PREFIX || '';
+const DEVICE_DOMAIN_SUFFIX = process.env.DEVICE_DOMAIN_SUFFIX || '.beago-fish.ts.net';
+const CLIENT_LOG_PATH = process.env.CLIENT_LOG_PATH || join(process.cwd(), 'client-events.log');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -137,21 +141,111 @@ function buildAppConfig() {
     defaultTurnCredential: defaultTurnAuth.credential,
     defaultServerBandwidthMbps: process.env.DEFAULT_SERVER_BANDWIDTH_MBPS || '20',
     turnPresets: buildTurnPresets(),
-    defaultWhipUrl: process.env.DEFAULT_WHIP_URL || 'http://localhost:9001/mtx/demo-stream/whip',
-    defaultWhepUrl: process.env.DEFAULT_WHEP_URL || 'http://localhost:9001/mtx/demo-stream/whep',
+    defaultWhipUrl: process.env.DEFAULT_WHIP_URL || '/online/whip',
+    defaultWhepUrl: process.env.DEFAULT_WHEP_URL || '/online/whep',
     defaultForceRelay: process.env.DEFAULT_FORCE_RELAY !== '0',
     defaultTurnOnly: process.env.DEFAULT_TURN_ONLY !== '0',
     defaultAutoStart: process.env.DEFAULT_AUTO_START !== '0',
   };
 }
 
+function normalizePathPrefix(value) {
+  return value ? `/${value}`.replace(/\/+/g, '/').replace(/\/$/, '') : '';
+}
+
+function buildDynamicDeviceOrigin(device) {
+  const normalizedDevice = String(device || '').trim().toLowerCase();
+  if (!/^[a-z0-9-]+$/.test(normalizedDevice)) {
+    return null;
+  }
+  const suffix = String(DEVICE_DOMAIN_SUFFIX || '').trim();
+  if (!suffix.startsWith('.')) {
+    return null;
+  }
+  return `https://${normalizedDevice}${suffix}`;
+}
+
+function resolveMediaUpstream(requestUrl) {
+  const path = String(requestUrl.pathname || '');
+  const onlineMatch = path.match(/^\/online(?:\/(.*))?$/i);
+  if (onlineMatch) {
+    const [, rest = ''] = onlineMatch;
+    const prefix = normalizePathPrefix(MEDIAMTX_PATH_PREFIX);
+    const normalizedRest = String(rest || '').replace(/^\/+/, '');
+    const targetPath = normalizedRest
+      ? `${prefix}/online/${normalizedRest}${requestUrl.search}`
+      : `${prefix}/online${requestUrl.search}`;
+    return {
+      publicPrefix: '/online',
+      upstreamUrl: new URL(targetPath, MEDIAMTX_ORIGIN),
+    };
+  }
+
+  const offlineAliasMatch = path.match(/^\/offline(?:\/(.*))?$/i);
+  if (offlineAliasMatch) {
+    const [, rest = ''] = offlineAliasMatch;
+    const prefix = normalizePathPrefix(MEDIAMTX_PATH_PREFIX);
+    const normalizedRest = String(rest || '').replace(/^\/+/, '');
+    const targetPath = normalizedRest
+      ? `${prefix}/online/${normalizedRest}${requestUrl.search}`
+      : `${prefix}/online${requestUrl.search}`;
+    return {
+      publicPrefix: '/online',
+      upstreamUrl: new URL(targetPath, MEDIAMTX_ORIGIN),
+    };
+  }
+
+  const fishMatch = path.match(/^\/(fish_(?:front|back|left|right))(?:\/(.*))?$/i);
+  if (fishMatch) {
+    const [, stream, rest = ''] = fishMatch;
+    const prefix = normalizePathPrefix(MEDIAMTX_PATH_PREFIX);
+    const normalizedRest = String(rest || '').replace(/^\/+/, '');
+    const targetPath = normalizedRest
+      ? `${prefix}/${stream}/${normalizedRest}${requestUrl.search}`
+      : `${prefix}/${stream}${requestUrl.search}`;
+    return {
+      publicPrefix: `/${stream}`,
+      upstreamUrl: new URL(targetPath, MEDIAMTX_ORIGIN),
+    };
+  }
+
+  const match = path.match(/^\/mtx\/([a-z0-9-]+)\/([^/]+)\/(whep|whip)(\/.*)?$/i);
+  if (match) {
+    const [, device, stream, action, tail = ''] = match;
+    const origin = buildDynamicDeviceOrigin(device);
+    if (origin) {
+      return {
+        publicPrefix: `/mtx/${device}`,
+        upstreamUrl: new URL(`/mtx/${stream}/${action}${tail}${requestUrl.search}`, origin),
+      };
+    }
+  }
+
+  const relativePath = path.replace(/^\/mtx/, '') || '/';
+  const prefix = normalizePathPrefix(MEDIAMTX_PATH_PREFIX);
+  return {
+    publicPrefix: '/mtx',
+    upstreamUrl: new URL(`${prefix}${relativePath}${requestUrl.search}`, MEDIAMTX_ORIGIN),
+  };
+}
+
+function rewriteLocationForClient(requestPath, targetPath, search = '') {
+  const currentPath = String(requestPath || '/');
+  const target = String(targetPath || '/');
+  const baseDir = currentPath.endsWith('/')
+    ? currentPath
+    : currentPath.slice(0, currentPath.lastIndexOf('/') + 1) || '/';
+  const relativePath = pathPosix.relative(baseDir, target) || '.';
+  return `${relativePath}${search}`;
+}
+
 function proxyToMediaMTX(req, res, requestUrl) {
-  const upstreamPath = requestUrl.pathname.replace(/^\/mtx/, '') || '/';
-  const upstreamUrl = new URL(upstreamPath + requestUrl.search, MEDIAMTX_ORIGIN);
+  const { upstreamUrl, publicPrefix } = resolveMediaUpstream(requestUrl);
   const headers = { ...req.headers };
   headers.host = upstreamUrl.host;
+  const requestImpl = upstreamUrl.protocol === 'https:' ? httpsRequest : httpRequest;
 
-  const upstream = httpRequest(upstreamUrl, {
+  const upstream = requestImpl(upstreamUrl, {
     method: req.method,
     headers,
   }, (upstreamRes) => {
@@ -159,7 +253,14 @@ function proxyToMediaMTX(req, res, requestUrl) {
     const location = upstreamRes.headers.location;
     if (location) {
       const absolute = new URL(location, upstreamUrl);
-      responseHeaders.location = `/mtx${absolute.pathname}${absolute.search}`;
+      const rewrittenPath = absolute.pathname.startsWith('/mtx/')
+        ? `${publicPrefix}${absolute.pathname.slice('/mtx'.length)}`
+        : `${publicPrefix}${absolute.pathname}`;
+      responseHeaders.location = rewriteLocationForClient(
+        requestUrl.pathname,
+        rewrittenPath,
+        absolute.search,
+      );
     }
     res.writeHead(upstreamRes.statusCode || 502, responseHeaders);
     upstreamRes.pipe(res);
@@ -173,9 +274,55 @@ function proxyToMediaMTX(req, res, requestUrl) {
   req.pipe(upstream);
 }
 
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
+async function handleClientLog(req, res) {
+  const raw = await readRequestBody(req);
+  let payload;
+  try {
+    payload = JSON.parse(raw || '{}');
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: false, error: 'invalid json' }));
+    return;
+  }
+
+  const line = JSON.stringify({
+    ts: new Date().toISOString(),
+    remote: req.socket.remoteAddress || '-',
+    page: String(payload.page || ''),
+    peerId: String(payload.peerId || ''),
+    group: String(payload.group || ''),
+    level: String(payload.level || ''),
+    message: String(payload.message || ''),
+  });
+  await appendFile(CLIENT_LOG_PATH, `${line}\n`, 'utf8');
+  res.writeHead(204);
+  res.end();
+}
+
 const server = createServer(async (req, res) => {
   try {
     const requestUrl = new URL(req.url || '/', 'http://localhost');
+    if (requestUrl.pathname === '/offline') {
+      res.writeHead(302, {
+        Location: rewriteLocationForClient(requestUrl.pathname, '/online/', requestUrl.search),
+        'Cache-Control': 'no-store',
+      });
+      res.end();
+      return;
+    }
+    if (req.method === 'POST' && requestUrl.pathname === '/client-log') {
+      await handleClientLog(req, res);
+      return;
+    }
     if (requestUrl.pathname === '/config.js') {
       const appConfig = buildAppConfig();
       res.writeHead(200, {
@@ -185,11 +332,22 @@ const server = createServer(async (req, res) => {
       res.end(`window.APP_CONFIG = ${JSON.stringify(appConfig, null, 2)};\n`);
       return;
     }
-    if (requestUrl.pathname === '/mtx' || requestUrl.pathname.startsWith('/mtx/')) {
+    if (
+      requestUrl.pathname === '/mtx' ||
+      requestUrl.pathname.startsWith('/mtx/') ||
+      requestUrl.pathname === '/offline' ||
+      requestUrl.pathname === '/online' ||
+      requestUrl.pathname.startsWith('/online/') ||
+      /^\/fish_(?:front|back|left|right)(?:\/|$)/i.test(requestUrl.pathname) ||
+      requestUrl.pathname.startsWith('/offline/')
+    ) {
       proxyToMediaMTX(req, res, requestUrl);
       return;
     }
-    const url = requestUrl.pathname === '/' ? '/index.html' : requestUrl.pathname;
+    let url = requestUrl.pathname;
+    if (url === '/') {
+      url = requestUrl.searchParams.get('v') === '4' ? '/v4.html' : '/index.html';
+    }
     const filePath = join(PUBLIC_DIR, url);
     const data = await readFile(filePath);
     const mime = MIME[extname(filePath)] || 'application/octet-stream';

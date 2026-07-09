@@ -59,35 +59,39 @@
         max-width: 1820px;
         margin: 10px auto;
         height: calc(100vh - 20px);
-        display: grid;
-        grid-template-rows: auto minmax(0, 1fr);
-        gap: 10px;
+        display: block;
       }
 
-      .hero {
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr);
+      .build-badge {
+        display: inline-flex;
         align-items: center;
-        gap: 16px;
-        padding: 10px 14px;
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: linear-gradient(180deg, rgba(22, 29, 37, 0.96), rgba(15, 20, 26, 0.96));
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+        padding: 4px 9px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(22, 32, 43, 0.92);
+        color: #b9d6f2;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10px;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
       }
 
-      h1 {
-        margin: 0;
-        font-size: clamp(18px, 2vw, 24px);
-        line-height: 1;
-        letter-spacing: -0.02em;
+      .footer-note {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: rgba(255,255,255,0.03);
       }
 
       .sub {
         margin: 0;
         color: var(--muted);
-        line-height: 1.45;
-        font-size: 12px;
+        line-height: 1.35;
+        font-size: 11px;
       }
 
       .grid {
@@ -142,6 +146,10 @@
         font: inherit;
       }
 
+      .input-wrap {
+        position: relative;
+      }
+
       input, select, textarea {
         width: 100%;
         padding: 8px 10px;
@@ -150,6 +158,36 @@
         background: rgba(13, 18, 24, 0.92);
         color: var(--text);
         font-size: 13px;
+      }
+
+      .input-wrap input {
+        padding-right: 34px;
+      }
+
+      .input-clear {
+        position: absolute;
+        top: 50%;
+        right: 6px;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--muted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transform: translateY(-50%);
+      }
+
+      .input-clear:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: var(--text);
+      }
+
+      .input-clear[hidden] {
+        display: none;
       }
 
       textarea {
@@ -218,7 +256,7 @@
 
       .center-col {
         display: grid;
-        gap: 10px;
+        gap: 8px;
         min-height: 0;
         overflow: auto;
         align-content: start;
@@ -233,35 +271,42 @@
 
       .status {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 8px;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 6px;
       }
 
       .stat {
         border: 1px solid var(--line);
-        border-radius: 12px;
-        padding: 10px 12px;
+        border-radius: 10px;
+        padding: 7px 9px;
         background: rgba(255,255,255,0.04);
+        min-width: 0;
       }
 
       .stat .k {
-        font-size: 12px;
+        font-size: 10px;
         color: var(--muted);
+        line-height: 1.2;
       }
 
       .stat .v {
-        margin-top: 4px;
-        font-size: 13px;
+        margin-top: 3px;
+        font-size: 12px;
         font-weight: 600;
         word-break: break-word;
+        line-height: 1.2;
       }
 
       .diag {
         border: 1px solid var(--line);
         border-left: 4px solid #66788c;
-        border-radius: 12px;
-        padding: 12px 14px;
+        border-radius: 10px;
+        padding: 8px 10px;
         background: rgba(255,255,255,0.04);
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: start;
+        column-gap: 10px;
       }
 
       .diag[data-level="info"] { border-left-color: #8c7a5f; }
@@ -271,14 +316,14 @@
 
       .diag .title {
         font-weight: 700;
-        font-size: 14px;
+        font-size: 12px;
+        line-height: 1.25;
       }
 
       .diag .detail {
-        margin-top: 4px;
         color: var(--muted);
-        line-height: 1.5;
-        font-size: 12px;
+        line-height: 1.35;
+        font-size: 11px;
       }
 
       .media {
@@ -289,18 +334,34 @@
 
       .video-card {
         position: relative;
+        display: grid;
+        grid-template-rows: minmax(0, 1fr) auto;
         overflow: hidden;
         border-radius: 14px;
         background: #0a0f14;
         border: 1px solid rgba(255,255,255,0.08);
-        min-height: 300px;
+        aspect-ratio: 1 / 1;
+        min-height: 0;
+      }
+
+      .video-stage {
+        position: relative;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(circle at top, rgba(56, 132, 255, 0.18), transparent 55%),
+          linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
       }
 
       video {
-        width: 100%;
-        height: 100%;
-        min-height: 300px;
-        object-fit: cover;
+        width: auto;
+        height: auto;
+        max-width: 100%;
+        max-height: 100%;
+        min-height: 0;
+        object-fit: contain;
         display: block;
         background: #0c0c0c;
       }
@@ -315,6 +376,62 @@
         color: white;
         font-size: 11px;
         letter-spacing: 0.03em;
+      }
+
+      .video-card .metric {
+        position: absolute;
+        right: 12px;
+        bottom: 12px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: rgba(8, 11, 15, 0.72);
+        color: #cfe8ff;
+        font-size: 11px;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+      }
+
+      .video-controls {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        border-top: 1px solid rgba(255,255,255,0.08);
+        background: rgba(8, 11, 15, 0.82);
+      }
+
+      .video-controls.note-only {
+        align-content: start;
+      }
+
+      .video-note {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .video-url {
+        width: 100%;
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 10px;
+        background: rgba(255,255,255,0.05);
+        color: #f3f7fb;
+        padding: 10px 12px;
+        font-size: 12px;
+      }
+
+      .video-url::placeholder {
+        color: rgba(224, 234, 245, 0.45);
+      }
+
+      .video-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .video-actions button {
+        min-width: 0;
       }
 
       .log {
@@ -440,7 +557,6 @@
 
         .wrap {
           height: auto;
-          display: block;
         }
 
         .grid {
@@ -455,10 +571,6 @@
           min-height: 320px;
         }
 
-        .hero {
-          grid-template-columns: 1fr;
-          gap: 8px;
-        }
       }
 
       @media (max-width: 920px) {
@@ -497,19 +609,21 @@
         body {
           padding-bottom: 88px;
         }
+
+        .footer-note {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .diag {
+          grid-template-columns: 1fr;
+          row-gap: 4px;
+        }
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <section class="hero">
-        <h1>WebRTC / TURN 验证台</h1>
-        <p class="sub">
-          这个页面用于验证你的公网 `coturn` 是否真的参与了媒体转发。推荐做法是：
-          mac 端选“推流端”，手机端选“观看端”，打开“强制 relay”，只保留 TURN 地址，然后观察最终候选是否显示为 `relay`。
-        </p>
-      </section>
-
       <section class="grid">
         <aside class="panel stack left-col">
           <div>
@@ -525,6 +639,19 @@
                   <option value="publisher">推流端（mac）</option>
                   <option value="viewer">观看端（手机）</option>
                 </select>
+              </label>
+            </div>
+            <div class="row two" style="margin-top: 8px;">
+              <label>
+                发布模式
+                <select id="publishMode">
+                  <option value="room">房间 WebRTC</option>
+                  <option value="whip">发布到 MediaMTX / WHIP</option>
+                </select>
+              </label>
+              <label id="whipUrlWrap">
+                WHIP 地址
+                <input id="whipUrl" placeholder="/online/whip" />
               </label>
             </div>
           </div>
@@ -548,6 +675,7 @@
                   <option value="1500">高码率模式 · 1500 kbps</option>
                   <option value="2500">超清模式 · 2500 kbps</option>
                   <option value="4000">1080p 高质量 · 4000 kbps</option>
+                  <option value="10000">实验模式 · 10000 kbps</option>
                 </select>
               </label>
             </div>
@@ -660,6 +788,10 @@
               <div class="v" id="sendResolution">unknown</div>
             </div>
             <div class="stat">
+              <div class="k">实际发送码率</div>
+              <div class="v" id="sendBitrate">unknown</div>
+            </div>
+            <div class="stat">
               <div class="k">接收分辨率</div>
               <div class="v" id="receiveResolution">unknown</div>
             </div>
@@ -679,14 +811,79 @@
           </section>
 
           <section class="media">
-            <div class="video-card">
-              <span class="tag">本地</span>
-              <video id="localVideo" autoplay playsinline muted></video>
+            <div class="video-card" id="localCard" hidden>
+              <div class="video-stage">
+                <span class="tag">本地预览</span>
+                <span class="metric" id="localMetric">待采集</span>
+                <video id="localVideo" autoplay playsinline muted></video>
+              </div>
+              <div class="video-controls note-only">
+                <p class="video-note">推流端在这里直接看当前采集到的本地画面。四宫格布局保持不变，但第一块切换为本地预览。</p>
+              </div>
+            </div>
+            <div class="video-card" id="remoteCard1">
+              <div class="video-stage">
+                <span class="tag">远端 1</span>
+                <span class="metric" id="remoteMetric1">待播放</span>
+                <video id="remoteVideo1" autoplay playsinline></video>
+              </div>
+              <div class="video-controls">
+                <input id="remoteUrl1" class="video-url" placeholder="远端 1 地址，默认留空" />
+                <div class="video-actions">
+                  <button class="primary" id="remotePlay1" type="button">播放</button>
+                  <button id="remoteStop1" type="button">停止</button>
+                </div>
+              </div>
             </div>
             <div class="video-card">
-              <span class="tag">远端</span>
-              <video id="remoteVideo" autoplay playsinline></video>
+              <div class="video-stage">
+                <span class="tag">远端 2</span>
+                <span class="metric" id="remoteMetric2">待播放</span>
+                <video id="remoteVideo2" autoplay playsinline></video>
+              </div>
+              <div class="video-controls">
+                <input id="remoteUrl2" class="video-url" placeholder="远端 2 地址，默认留空" />
+                <div class="video-actions">
+                  <button class="primary" id="remotePlay2" type="button">播放</button>
+                  <button id="remoteStop2" type="button">停止</button>
+                </div>
+              </div>
             </div>
+            <div class="video-card">
+              <div class="video-stage">
+                <span class="tag">远端 3</span>
+                <span class="metric" id="remoteMetric3">待播放</span>
+                <video id="remoteVideo3" autoplay playsinline></video>
+              </div>
+              <div class="video-controls">
+                <input id="remoteUrl3" class="video-url" placeholder="远端 3 地址，默认留空" />
+                <div class="video-actions">
+                  <button class="primary" id="remotePlay3" type="button">播放</button>
+                  <button id="remoteStop3" type="button">停止</button>
+                </div>
+              </div>
+            </div>
+            <div class="video-card">
+              <div class="video-stage">
+                <span class="tag">远端 4</span>
+                <span class="metric" id="remoteMetric4">待播放</span>
+                <video id="remoteVideo4" autoplay playsinline></video>
+              </div>
+              <div class="video-controls">
+                <input id="remoteUrl4" class="video-url" placeholder="远端 4 地址，默认留空" />
+                <div class="video-actions">
+                  <button class="primary" id="remotePlay4" type="button">播放</button>
+                  <button id="remoteStop4" type="button">停止</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="footer-note">
+            <p class="sub">
+              验证重点：推流端和观看端分开，优先打开“强制 relay”和 TURN only，看候选对是否进入 `relay`。
+            </p>
+            <div class="build-badge" id="buildBadge">build unknown</div>
           </section>
 
         </main>
@@ -720,16 +917,54 @@
     <script src="/config.js"></script>
     <script>
       const appConfig = window.APP_CONFIG || {};
+      const BUILD_VERSION = '2026-06-25-latency-overlay-1';
       const peerId = crypto.randomUUID();
       const logEl = document.getElementById('log');
       const logSignalEl = document.getElementById('logSignal');
       const logNegotiationEl = document.getElementById('logNegotiation');
       const logIceEl = document.getElementById('logIce');
       const logMediaEl = document.getElementById('logMedia');
+      const localCard = document.getElementById('localCard');
+      const remoteCard1 = document.getElementById('remoteCard1');
       const localVideo = document.getElementById('localVideo');
-      const remoteVideo = document.getElementById('remoteVideo');
+      const localMetricEl = document.getElementById('localMetric');
+      const remoteVideoEls = [
+        document.getElementById('remoteVideo1'),
+        document.getElementById('remoteVideo2'),
+        document.getElementById('remoteVideo3'),
+        document.getElementById('remoteVideo4'),
+      ];
+      const remoteUrlInputs = [
+        document.getElementById('remoteUrl1'),
+        document.getElementById('remoteUrl2'),
+        document.getElementById('remoteUrl3'),
+        document.getElementById('remoteUrl4'),
+      ];
+      const remoteMetricEls = [
+        document.getElementById('remoteMetric1'),
+        document.getElementById('remoteMetric2'),
+        document.getElementById('remoteMetric3'),
+        document.getElementById('remoteMetric4'),
+      ];
+      const remotePlayBtns = [
+        document.getElementById('remotePlay1'),
+        document.getElementById('remotePlay2'),
+        document.getElementById('remotePlay3'),
+        document.getElementById('remotePlay4'),
+      ];
+      const remoteStopBtns = [
+        document.getElementById('remoteStop1'),
+        document.getElementById('remoteStop2'),
+        document.getElementById('remoteStop3'),
+        document.getElementById('remoteStop4'),
+      ];
+      const remoteVideo = remoteVideoEls[0];
       const roomInput = document.getElementById('roomId');
       const roleInput = document.getElementById('role');
+      const publishModeInput = document.getElementById('publishMode');
+      const whipUrlWrap = document.getElementById('whipUrlWrap');
+      const whipUrlInput = document.getElementById('whipUrl');
+      const whepUrlInput = remoteUrlInputs[0];
       const mediaSourceInput = document.getElementById('mediaSource');
       const videoBitrateInput = document.getElementById('videoBitrate');
       const frameRateInput = document.getElementById('frameRate');
@@ -755,12 +990,17 @@
       const peerStateEl = document.getElementById('peerState');
       const captureResolutionEl = document.getElementById('captureResolution');
       const sendResolutionEl = document.getElementById('sendResolution');
+      const sendBitrateEl = document.getElementById('sendBitrate');
       const receiveResolutionEl = document.getElementById('receiveResolution');
+      const remoteLatencyEl = remoteMetricEls[0];
       const serverBandwidthStateEl = document.getElementById('serverBandwidthState');
       const capacityEstimateEl = document.getElementById('capacityEstimate');
       const diagnosisEl = document.getElementById('diagnosis');
       const diagnosisTitleEl = document.getElementById('diagnosisTitle');
       const diagnosisDetailEl = document.getElementById('diagnosisDetail');
+      const buildBadgeEl = document.getElementById('buildBadge');
+      const clientLogEndpoint = '/client-log';
+      const ADDRESS_STORAGE_KEY = 'webrtc-relay-demo:v3-addresses';
 
       let ws;
       let pc = null;
@@ -772,6 +1012,24 @@
       let pollingStats = null;
       let tracksAdded = false;
       let negotiationInFlight = false;
+      let whepSessionUrl = null;
+      let whipSessionUrl = null;
+      const secondaryRemoteSessions = remoteVideoEls.slice(1).map(() => ({
+        pc: null,
+        sessionUrl: null,
+        pollingStats: null,
+      }));
+      const remotePlaybackState = remoteVideoEls.map(() => ({
+        lastTime: -1,
+        stalledTicks: 0,
+        timer: null,
+        prevJitterBufferDelay: null,
+        prevJitterBufferEmittedCount: null,
+      }));
+      let outboundVideoState = {
+        bytesSent: null,
+        timestamp: null,
+      };
       const maxLogLines = 30;
 
       let runtimeConfig = { ...appConfig };
@@ -780,6 +1038,11 @@
       const initialTurnPreset = params.get('turnPreset');
       const roleLocked = params.has('role') && params.get('lockRole') === '1';
       roomInput.value = runtimeConfig.defaultRoom || 'demo-room';
+      whipUrlInput.value = runtimeConfig.defaultWhipUrl || '';
+      remoteUrlInputs.forEach((input) => {
+        input.value = '';
+      });
+      remoteUrlInputs[0].value = runtimeConfig.defaultWhepUrl || '';
       iceUrlsInput.value = (runtimeConfig.defaultTurnUrls || []).join('\n');
       turnUsernameInput.value = runtimeConfig.defaultTurnUsername || '';
       turnCredentialInput.value = runtimeConfig.defaultTurnCredential || '';
@@ -790,6 +1053,13 @@
 
       if (params.get('room')) roomInput.value = params.get('room');
       if (params.get('role')) roleInput.value = params.get('role');
+      if (params.get('publishMode')) publishModeInput.value = params.get('publishMode');
+      if (params.has('whip')) whipUrlInput.value = normalizeWhipUrl(params.get('whip'));
+      if (params.has('whep')) remoteUrlInputs[0].value = params.get('whep');
+      if (params.has('whep1')) remoteUrlInputs[0].value = params.get('whep1');
+      if (params.has('whep2')) remoteUrlInputs[1].value = params.get('whep2');
+      if (params.has('whep3')) remoteUrlInputs[2].value = params.get('whep3');
+      if (params.has('whep4')) remoteUrlInputs[3].value = params.get('whep4');
       if (params.get('relay') === '0') forceRelayInput.checked = false;
       if (params.get('relay') === '1') forceRelayInput.checked = true;
       if (params.get('turnOnly') === '0') turnOnlyInput.checked = false;
@@ -807,6 +1077,58 @@
       if (roleLocked) {
         roleInput.disabled = true;
       }
+
+      buildBadgeEl.textContent = `build ${BUILD_VERSION}`;
+
+      function loadPersistedAddresses() {
+        try {
+          return JSON.parse(localStorage.getItem(ADDRESS_STORAGE_KEY) || '{}');
+        } catch {
+          return {};
+        }
+      }
+
+      function normalizeWhipUrl(value) {
+        const trimmed = String(value || '').trim();
+        if (!trimmed) return trimmed;
+        if (/^https?:\/\/(localhost|127\.0\.0\.1)(:9001)?\/offline\/whip$/i.test(trimmed)) {
+          return '/online/whip';
+        }
+        if (/^https:\/\/peng-mbp14\.li-adder\.ts\.net(?::8889)?\/offline\/whip$/i.test(trimmed)) {
+          return '/online/whip';
+        }
+        return trimmed;
+      }
+
+      function resolveRequestUrl(value) {
+        return new URL(String(value || '').trim(), location.href).toString();
+      }
+
+      function resolveSessionUrl(locationHeader, requestUrl) {
+        if (!locationHeader) return null;
+        return new URL(locationHeader, resolveRequestUrl(requestUrl)).toString();
+      }
+
+      function persistAddresses() {
+        try {
+          localStorage.setItem(ADDRESS_STORAGE_KEY, JSON.stringify({
+            whipUrl: normalizeWhipUrl(whipUrlInput.value),
+            remoteUrls: remoteUrlInputs.map((input) => input.value.trim()),
+          }));
+        } catch {}
+      }
+
+      const persistedAddresses = loadPersistedAddresses();
+      if (!params.has('whip') && persistedAddresses.whipUrl) {
+        whipUrlInput.value = normalizeWhipUrl(persistedAddresses.whipUrl);
+      }
+      whipUrlInput.value = normalizeWhipUrl(whipUrlInput.value);
+      remoteUrlInputs.forEach((input, index) => {
+        const key = index === 0 ? 'whep' : `whep${index + 1}`;
+        if (!params.has(key) && Array.isArray(persistedAddresses.remoteUrls) && persistedAddresses.remoteUrls[index]) {
+          input.value = persistedAddresses.remoteUrls[index];
+        }
+      });
 
       function getSelectedTurnPreset(urlsText) {
         const normalized = urlsText
@@ -835,6 +1157,17 @@
         el.textContent = value;
       }
 
+      function formatLatencyMs(ms) {
+        if (!Number.isFinite(ms) || ms < 0) return '--';
+        return `${Math.round(ms)} ms`;
+      }
+
+      function formatBitrateKbps(kbps) {
+        if (!Number.isFinite(kbps) || kbps < 0) return '--';
+        if (kbps >= 1000) return `${(kbps / 1000).toFixed(2)} Mbps`;
+        return `${Math.round(kbps)} kbps`;
+      }
+
       function formatResolution(width, height) {
         if (!width || !height) return 'unknown';
         return `${width}x${height}`;
@@ -855,6 +1188,7 @@
       function bindVideoDiagnostics(videoEl, label) {
         if (!videoEl || videoEl.dataset.diagBound === '1') return;
         videoEl.dataset.diagBound = '1';
+        const metricIndex = label === 'remote' ? 0 : (label.startsWith('remote-slot-') ? Number(label.replace('remote-slot-', '')) - 1 : -1);
         videoEl.addEventListener('loadedmetadata', () => {
           if (label === 'local') {
             setText(captureResolutionEl, formatResolution(videoEl.videoWidth, videoEl.videoHeight));
@@ -862,19 +1196,51 @@
           if (label === 'remote') {
             setText(receiveResolutionEl, formatResolution(videoEl.videoWidth, videoEl.videoHeight));
           }
+          if (metricIndex >= 0) {
+            resetRemotePlaybackState(metricIndex);
+          }
           log(`media video metadata loaded target=${label} size=${videoEl.videoWidth || 0}x${videoEl.videoHeight || 0}`);
         });
         videoEl.addEventListener('playing', () => {
+          if (metricIndex >= 0) {
+            startRemotePlaybackWatch(metricIndex);
+          }
           log(`media video playing target=${label}`);
         });
         videoEl.addEventListener('waiting', () => {
+          if (metricIndex >= 0) {
+            setRemoteMetric(metricIndex, '等待数据');
+          }
           log(`media video waiting target=${label}`, 'warn');
         });
         videoEl.addEventListener('stalled', () => {
+          if (metricIndex >= 0) {
+            setRemoteMetric(metricIndex, '播放卡住');
+          }
           log(`media video stalled target=${label}`, 'warn');
+        });
+        videoEl.addEventListener('pause', () => {
+          if (metricIndex >= 0 && videoEl.srcObject) {
+            setRemoteMetric(metricIndex, '已暂停');
+          }
+        });
+        videoEl.addEventListener('ended', () => {
+          if (metricIndex >= 0) {
+            setRemoteMetric(metricIndex, '播放结束');
+            stopRemotePlaybackWatch(metricIndex);
+          }
+        });
+        videoEl.addEventListener('emptied', () => {
+          if (metricIndex >= 0) {
+            setRemoteMetric(metricIndex, '待播放');
+            stopRemotePlaybackWatch(metricIndex);
+          }
         });
         videoEl.addEventListener('error', () => {
           const code = videoEl.error?.code || '-';
+          if (metricIndex >= 0) {
+            setRemoteMetric(metricIndex, '播放错误');
+          }
           log(`media video error target=${label} code=${code}`, 'error');
         });
       }
@@ -898,6 +1264,25 @@
         const url = new URL(location.href);
         url.searchParams.set('room', roomInput.value.trim() || 'demo-room');
         url.searchParams.set('role', shareRole || roleInput.value);
+        url.searchParams.set('publishMode', publishModeInput.value);
+        if (whipUrlInput.value.trim()) {
+          url.searchParams.set('whip', whipUrlInput.value.trim());
+        } else {
+          url.searchParams.delete('whip');
+        }
+        remoteUrlInputs.forEach((input, index) => {
+          const key = `whep${index + 1}`;
+          if (input.value.trim()) {
+            url.searchParams.set(key, input.value.trim());
+          } else {
+            url.searchParams.delete(key);
+          }
+        });
+        if (remoteUrlInputs[0].value.trim()) {
+          url.searchParams.set('whep', remoteUrlInputs[0].value.trim());
+        } else {
+          url.searchParams.delete('whep');
+        }
         if (lockSharedRole) {
           url.searchParams.set('lockRole', '1');
         } else {
@@ -944,6 +1329,180 @@
       function syncUrlState() {
         const next = buildStateUrl();
         history.replaceState(null, '', next);
+        persistAddresses();
+      }
+
+      function setRemoteMetric(index, value) {
+        setText(remoteMetricEls[index], value);
+      }
+
+      function resetRemotePlaybackState(index) {
+        const state = remotePlaybackState[index];
+        if (!state) return;
+        state.lastTime = -1;
+        state.stalledTicks = 0;
+        state.prevJitterBufferDelay = null;
+        state.prevJitterBufferEmittedCount = null;
+      }
+
+      function startRemotePlaybackWatch(index) {
+        const state = remotePlaybackState[index];
+        const videoEl = remoteVideoEls[index];
+        if (!state || !videoEl) return;
+        if (state.timer) return;
+        state.timer = setInterval(() => {
+          const hasStream = Boolean(videoEl.srcObject);
+          if (!hasStream) return;
+          if (videoEl.ended) {
+            setRemoteMetric(index, '播放结束');
+            return;
+          }
+          if (videoEl.paused) {
+            setRemoteMetric(index, '已暂停');
+            return;
+          }
+          const current = Number(videoEl.currentTime || 0);
+          if (current > state.lastTime + 0.05) {
+            state.lastTime = current;
+            state.stalledTicks = 0;
+            return;
+          }
+          state.stalledTicks += 1;
+          if (state.stalledTicks >= 2) {
+            if (videoEl.readyState <= 2) {
+              setRemoteMetric(index, '等待数据');
+            } else {
+              setRemoteMetric(index, '播放停止');
+            }
+          }
+        }, 1500);
+      }
+
+      function stopRemotePlaybackWatch(index) {
+        const state = remotePlaybackState[index];
+        if (!state?.timer) {
+          resetRemotePlaybackState(index);
+          return;
+        }
+        clearInterval(state.timer);
+        state.timer = null;
+        resetRemotePlaybackState(index);
+      }
+
+      function stopSecondaryRemoteStats(index) {
+        const slot = secondaryRemoteSessions[index];
+        if (slot?.pollingStats) {
+          clearInterval(slot.pollingStats);
+          slot.pollingStats = null;
+        }
+      }
+
+      function canDisplayLatencyMetric(index) {
+        const state = remotePlaybackState[index];
+        const videoEl = remoteVideoEls[index];
+        if (!videoEl?.srcObject) return false;
+        if (videoEl.ended || videoEl.paused) return false;
+        return !state || state.stalledTicks < 2;
+      }
+
+      function computeInboundVideoLatencyMs(index, inboundVideo) {
+        const state = remotePlaybackState[index];
+        let latencyMs = NaN;
+
+        if (
+          Number.isFinite(inboundVideo.estimatedPlayoutTimestamp) &&
+          Number.isFinite(inboundVideo.lastPacketReceivedTimestamp)
+        ) {
+          const directMs = inboundVideo.estimatedPlayoutTimestamp - inboundVideo.lastPacketReceivedTimestamp;
+          if (Number.isFinite(directMs) && directMs >= 0 && directMs < 60000) {
+            latencyMs = directMs;
+          }
+        }
+
+        if (
+          !Number.isFinite(latencyMs) &&
+          Number.isFinite(inboundVideo.jitterBufferDelay) &&
+          Number.isFinite(inboundVideo.jitterBufferEmittedCount) &&
+          inboundVideo.jitterBufferEmittedCount > 0
+        ) {
+          const totalDelay = inboundVideo.jitterBufferDelay;
+          const totalEmitted = inboundVideo.jitterBufferEmittedCount;
+          if (
+            state &&
+            Number.isFinite(state.prevJitterBufferDelay) &&
+            Number.isFinite(state.prevJitterBufferEmittedCount)
+          ) {
+            const delayDelta = totalDelay - state.prevJitterBufferDelay;
+            const emittedDelta = totalEmitted - state.prevJitterBufferEmittedCount;
+            if (delayDelta >= 0 && emittedDelta > 0) {
+              latencyMs = (delayDelta / emittedDelta) * 1000;
+            }
+          }
+          if (!Number.isFinite(latencyMs)) {
+            latencyMs = (totalDelay / totalEmitted) * 1000;
+          }
+          if (state) {
+            state.prevJitterBufferDelay = totalDelay;
+            state.prevJitterBufferEmittedCount = totalEmitted;
+          }
+        }
+
+        return latencyMs;
+      }
+
+      function computeOutboundVideoBitrateKbps(outboundVideo) {
+        if (
+          !outboundVideo ||
+          !Number.isFinite(outboundVideo.bytesSent) ||
+          !Number.isFinite(outboundVideo.timestamp)
+        ) {
+          return null;
+        }
+        if (
+          !Number.isFinite(outboundVideoState.bytesSent) ||
+          !Number.isFinite(outboundVideoState.timestamp)
+        ) {
+          outboundVideoState = {
+            bytesSent: outboundVideo.bytesSent,
+            timestamp: outboundVideo.timestamp,
+          };
+          return null;
+        }
+
+        const bytesDelta = outboundVideo.bytesSent - outboundVideoState.bytesSent;
+        const timeDeltaMs = outboundVideo.timestamp - outboundVideoState.timestamp;
+        outboundVideoState = {
+          bytesSent: outboundVideo.bytesSent,
+          timestamp: outboundVideo.timestamp,
+        };
+        if (bytesDelta < 0 || timeDeltaMs <= 0) {
+          return null;
+        }
+        return (bytesDelta * 8) / timeDeltaMs;
+      }
+
+      async function updateSecondaryRemoteStats(index) {
+        const slot = secondaryRemoteSessions[index];
+        if (!slot?.pc) return;
+        const stats = await slot.pc.getStats();
+        let inboundVideo = null;
+        stats.forEach((report) => {
+          if (!inboundVideo && report.type === 'inbound-rtp' && report.kind === 'video' && !report.isRemote) {
+            inboundVideo = report;
+          }
+        });
+        if (!inboundVideo) return;
+        const latencyMs = computeInboundVideoLatencyMs(index + 1, inboundVideo);
+        if (canDisplayLatencyMetric(index + 1)) {
+          setRemoteMetric(index + 1, `接收缓冲 ${formatLatencyMs(latencyMs)}`);
+        }
+      }
+
+      function startSecondaryRemoteStats(index) {
+        stopSecondaryRemoteStats(index);
+        secondaryRemoteSessions[index].pollingStats = setInterval(() => {
+          updateSecondaryRemoteStats(index).catch((err) => log(`remote slot ${index + 2} stats failed: ${err.message}`, 'warn'));
+        }, 1500);
       }
 
       function updateCapacityEstimate() {
@@ -955,6 +1514,81 @@
         relayUsageEstimateInput.value = `${relayPerStreamKbps} kbps`;
         setText(serverBandwidthStateEl, `${serverMbps} Mbps`);
         setText(capacityEstimateEl, `${capacity} 路`);
+      }
+
+      function waitForIceGatheringComplete(connection, timeoutMs = 8000) {
+        if (connection.iceGatheringState === 'complete') {
+          return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+          let settled = false;
+          let timer = null;
+          const finish = (reason) => {
+            if (settled) return;
+            settled = true;
+            connection.removeEventListener('icegatheringstatechange', handler);
+            if (timer) {
+              clearTimeout(timer);
+            }
+            resolve(reason);
+          };
+          const handler = () => {
+            if (connection.iceGatheringState === 'complete') {
+              finish('complete');
+            }
+          };
+          connection.addEventListener('icegatheringstatechange', handler);
+          if (timeoutMs > 0) {
+            timer = setTimeout(() => finish('timeout'), timeoutMs);
+          }
+        });
+      }
+
+      async function deleteWhepSession() {
+        if (!whepSessionUrl) return;
+        try {
+          await fetch(whepSessionUrl, { method: 'DELETE' });
+          log(`whep session deleted: ${whepSessionUrl}`);
+        } catch (error) {
+          log(`delete whep session failed: ${error.message}`, 'warn');
+        }
+        whepSessionUrl = null;
+      }
+
+      async function deleteWhipSession() {
+        if (!whipSessionUrl) return;
+        try {
+          await fetch(whipSessionUrl, { method: 'DELETE' });
+          log(`whip session deleted: ${whipSessionUrl}`);
+        } catch (error) {
+          log(`delete whip session failed: ${error.message}`, 'warn');
+        }
+        whipSessionUrl = null;
+      }
+
+      async function stopSecondaryRemoteSession(index) {
+        const slot = secondaryRemoteSessions[index];
+        if (!slot) return;
+        stopSecondaryRemoteStats(index);
+        if (slot.sessionUrl) {
+          try {
+            await fetch(slot.sessionUrl, { method: 'DELETE' });
+            log(`remote slot ${index + 2} whep session deleted: ${slot.sessionUrl}`);
+          } catch (error) {
+            log(`remote slot ${index + 2} delete failed: ${error.message}`, 'warn');
+          }
+          slot.sessionUrl = null;
+        }
+        if (slot.pc) {
+          slot.pc.ontrack = null;
+          slot.pc.oniceconnectionstatechange = null;
+          slot.pc.onconnectionstatechange = null;
+          slot.pc.close();
+          slot.pc = null;
+        }
+        stopRemotePlaybackWatch(index + 1);
+        remoteVideoEls[index + 1].srcObject = null;
+        setRemoteMetric(index + 1, '待播放');
       }
 
       function detectLogLevel(msg) {
@@ -1058,6 +1692,21 @@
         }
         logEl.scrollTop = logEl.scrollHeight;
         console.log(line);
+        queueClientLog({ group, level, message: line });
+      }
+
+      function queueClientLog(entry) {
+        const payload = JSON.stringify({
+          peerId,
+          page: location.href,
+          ...entry,
+        });
+        fetch(clientLogEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {});
       }
 
       function setDiagnosis(level, title, detail) {
@@ -1072,6 +1721,15 @@
       }
 
       async function handleJoin() {
+        if (isViewerRole() && whepUrlInput.value.trim()) {
+          await startWhepPlayback();
+          return;
+        }
+        if (!isViewerRole() && isWhipPublishMode()) {
+          await ensureMedia();
+          note('info', 'WHIP 发布模式已就绪', '本端不会加入房间；点击“开始发布”后会直接把本地媒体发布到 MediaMTX。', `whip publish ready url=${whipUrlInput.value.trim() || '-'}`);
+          return;
+        }
         if (ws.readyState !== WebSocket.OPEN) {
           log('signal not ready');
           return;
@@ -1081,6 +1739,11 @@
       }
 
       async function handleCall() {
+        log(`handleCall role=${roleInput.value} publishMode=${publishModeInput.value} viewer=${isViewerRole()} whipMode=${isWhipPublishMode()}`);
+        if (!isViewerRole() && isWhipPublishMode()) {
+          await startWhipPublish();
+          return;
+        }
         await makeOffer();
       }
 
@@ -1176,14 +1839,56 @@
         return roleInput.value === 'viewer';
       }
 
+      function isWhipPublishMode() {
+        return !isViewerRole() && publishModeInput.value === 'whip';
+      }
+
+      function hasLocalPreviewCard() {
+        return !isViewerRole();
+      }
+
+      function setLocalMetric(value) {
+        setText(localMetricEl, value);
+      }
+
+      function syncMediaGridUi() {
+        const showLocal = hasLocalPreviewCard();
+        localCard.hidden = !showLocal;
+        remoteCard1.hidden = showLocal;
+      }
+
+      function releaseLocalStream() {
+        if (localStream) {
+          localStream.getTracks().forEach((track) => track.stop());
+          localStream = null;
+        }
+        localVideo.srcObject = null;
+        setLocalMetric('待采集');
+        setText(captureResolutionEl, 'unknown');
+      }
+
       function syncRoleUi() {
         const viewer = isViewerRole();
+        syncMediaGridUi();
         mediaSourceInput.disabled = viewer;
+        const whipMode = isWhipPublishMode();
+        whipUrlWrap.hidden = viewer;
+        publishModeInput.disabled = viewer;
+        roomInput.disabled = whipMode;
         callBtn.disabled = viewer;
+        callBtnMobile.disabled = viewer;
+        joinBtn.disabled = whipMode;
+        joinBtnMobile.disabled = whipMode;
+        callBtn.textContent = whipMode ? '开始发布' : '开始连接';
+        callBtnMobile.textContent = whipMode ? '开始发布' : '开始连接';
         if (viewer) {
-          localVideo.srcObject = null;
+          releaseLocalStream();
           note('info', '当前是观看端', '本端不会采集摄像头，也不会主动发起连接；等待推流端发起即可。', 'viewer mode active: local capture and manual call disabled');
+        } else if (whipMode) {
+          setLocalMetric(localStream ? '本地预览' : '待采集');
+          note('info', '当前是 WHIP 发布模式', '本端会采集本地媒体，并直接发布到 MediaMTX；不再加入房间或等待对端。', 'publisher whip mode active');
         } else {
+          setLocalMetric(localStream ? '本地预览' : '待采集');
           note('info', '当前是推流端', '本端会采集本地媒体，并在另一端加入后发起连接。', 'publisher mode active');
         }
       }
@@ -1203,20 +1908,51 @@
         const frameRate = Number(frameRateInput.value || 12);
         const height = Number(videoHeightInput.value || 360);
         const audio = true;
-        const video = {
+        const targetWidth = Math.round(height * 16 / 9);
+        const exactVideo = {
+          frameRate: { ideal: frameRate, max: frameRate },
+          height: { exact: height },
+          width: { exact: targetWidth },
+        };
+        const fallbackVideo = {
           frameRate: { ideal: frameRate, max: frameRate },
           height: { ideal: height, max: height },
-          width: { ideal: Math.round(height * 16 / 9) },
+          width: { ideal: targetWidth, max: targetWidth },
         };
         log(`media capture requested source=${mediaSourceInput.value} height=${height} frameRate=${frameRate}`);
 
-        if (mediaSourceInput.value === 'screen') {
-          localStream = await navigator.mediaDevices.getDisplayMedia({ video, audio });
-        } else {
-          localStream = await navigator.mediaDevices.getUserMedia({ video, audio });
+        try {
+          if (mediaSourceInput.value === 'screen') {
+            localStream = await navigator.mediaDevices.getDisplayMedia({ video: fallbackVideo, audio });
+          } else {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: exactVideo, audio });
+          }
+        } catch (error) {
+          if (
+            mediaSourceInput.value === 'camera' &&
+            (error?.name === 'OverconstrainedError' || error?.name === 'NotFoundError')
+          ) {
+            throw new Error(`当前摄像头无法提供 ${targetWidth}x${height} @ ${frameRate}fps，请切换更高规格摄像头，或把分辨率降到 720p/360p。`);
+          }
+          throw error;
         }
         localVideo.srcObject = localStream;
+        setLocalMetric('本地预览');
         bindVideoDiagnostics(localVideo, 'local');
+        const videoTrack = localStream.getVideoTracks()[0];
+        const settings = videoTrack?.getSettings?.() || {};
+        if (
+          mediaSourceInput.value === 'camera' &&
+          settings.width &&
+          settings.height &&
+          (settings.width < targetWidth || settings.height < height)
+        ) {
+          releaseLocalStream();
+          throw new Error(`摄像头实际只返回 ${settings.width}x${settings.height}，没有达到请求的 ${targetWidth}x${height}。请降低分辨率档位，或更换支持 1080p 的摄像头。`);
+        }
+        if (settings.width && settings.height) {
+          setText(captureResolutionEl, formatResolution(settings.width, settings.height));
+        }
         for (const track of localStream.getTracks()) {
           bindTrackDiagnostics(track, 'local');
         }
@@ -1325,6 +2061,8 @@
               outboundVideo.frameHeight || outboundVideo.frameHeightSent,
             ),
           );
+          const bitrateKbps = computeOutboundVideoBitrateKbps(outboundVideo);
+          setText(sendBitrateEl, formatBitrateKbps(bitrateKbps));
         }
         if (inboundVideo) {
           setText(
@@ -1334,6 +2072,10 @@
               inboundVideo.frameHeight || inboundVideo.frameHeightDecoded || inboundVideo.frameHeightReceived,
             ),
           );
+          const latencyMs = computeInboundVideoLatencyMs(0, inboundVideo);
+          if (canDisplayLatencyMetric(0)) {
+            setText(remoteLatencyEl, `接收缓冲 ${formatLatencyMs(latencyMs)}`);
+          }
         }
 
         if (selectedPairId) {
@@ -1374,11 +2116,12 @@
         }, 1500);
       }
 
-      function resetPeerConnection() {
+      async function resetPrimaryPeerConnection() {
         stopStatsPolling();
         tracksAdded = false;
         activePeerId = null;
         negotiationInFlight = false;
+        await deleteWhepSession();
         if (pc) {
           pc.onicecandidate = null;
           pc.ontrack = null;
@@ -1387,12 +2130,25 @@
           pc.close();
           pc = null;
         }
+        stopRemotePlaybackWatch(0);
         remoteVideo.srcObject = null;
         setText(iceStateEl, 'idle');
         setText(candidateStateEl, 'unknown');
         setText(peerStateEl, peers[0] || 'waiting');
         setText(sendResolutionEl, 'unknown');
+        setText(sendBitrateEl, 'unknown');
         setText(receiveResolutionEl, 'unknown');
+        setText(remoteLatencyEl, '待播放');
+        outboundVideoState = {
+          bytesSent: null,
+          timestamp: null,
+        };
+      }
+
+      async function resetPeerConnection() {
+        await resetPrimaryPeerConnection();
+        await deleteWhipSession();
+        await Promise.all(secondaryRemoteSessions.map((_, index) => stopSecondaryRemoteSession(index)));
         setDiagnosis('info', '连接已重置', '如果要重新测试，请让两端重新加入同一个房间。');
       }
 
@@ -1400,15 +2156,45 @@
         if (tracksAdded || isViewerRole()) return;
         const stream = await ensureMedia();
         if (!stream) return;
+        const whipMode = isWhipPublishMode();
         for (const track of stream.getTracks()) {
-          pc.addTrack(track, stream);
+          if (whipMode && track.kind === 'audio') {
+            log(`media sender track skipped kind=${track.kind} reason=whip-video-only`);
+            continue;
+          }
+          const sender = pc.addTrack(track, stream);
           log(`media sender track added kind=${track.kind} id=${track.id}`);
+          if (track.kind === 'video') {
+            preferH264Codec(sender);
+          }
         }
         tracksAdded = true;
         await applySenderParams();
       }
 
-      function ensurePeerConnection() {
+      function preferH264Codec(sender) {
+        if (!sender) return;
+        const transceiver = pc.getTransceivers().find((item) => item.sender === sender);
+        if (!transceiver || typeof transceiver.setCodecPreferences !== 'function') return;
+        const capabilities = RTCRtpSender.getCapabilities?.('video');
+        const codecs = capabilities?.codecs || [];
+        if (!codecs.length) return;
+
+        const preferred = codecs.filter((codec) => {
+          const mimeType = String(codec.mimeType || '').toLowerCase();
+          return mimeType === 'video/h264';
+        });
+        if (!preferred.length) {
+          log('video codec preference skipped: h264 not available', 'warn');
+          return;
+        }
+
+        const rest = codecs.filter((codec) => !preferred.includes(codec));
+        transceiver.setCodecPreferences([...preferred, ...rest]);
+        log(`video codec preference set=${preferred.map((codec) => codec.sdpFmtpLine || codec.mimeType).join(',')}`);
+      }
+
+      function ensurePeerConnection({ sendCandidates = true } = {}) {
         if (pc) return pc;
         pc = new RTCPeerConnection({
           iceServers: parseIceServers(),
@@ -1422,7 +2208,7 @@
             return;
           }
           log(`local candidate ${describeCandidate(event.candidate)}`);
-          if (!activePeerId) return;
+          if (!sendCandidates || !activePeerId) return;
           ws.send(JSON.stringify({
             type: 'signal',
             to: activePeerId,
@@ -1511,6 +2297,193 @@
 
         startStatsPolling();
         return pc;
+      }
+
+      async function startWhepPlayback() {
+        const whepUrl = whepUrlInput.value.trim();
+        if (!whepUrl) {
+          note('warn', '缺少 WHEP 地址', '先填写一个可访问的 WHEP endpoint，再开始拉流。', 'whep url missing');
+          return;
+        }
+
+        await resetPrimaryPeerConnection();
+        joined = false;
+        roomId = null;
+        peers = [];
+        setText(peerStateEl, 'whep');
+
+        const conn = ensurePeerConnection({ sendCandidates: false });
+        note('info', '开始 WHEP 拉流', '当前观看端将直接通过 WHEP 地址向媒体服务器发起播放，不再等待房间信令。', `whep playback start url=${whepUrl}`);
+
+        const offer = await conn.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true,
+        });
+        await conn.setLocalDescription(offer);
+        const gatherResult = await waitForIceGatheringComplete(conn);
+        log(`whep ICE gathering result=${gatherResult}`);
+
+        const response = await fetch(whepUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/sdp',
+          },
+          body: conn.localDescription.sdp,
+        });
+        if (!response.ok) {
+          throw new Error(`WHEP request failed: ${response.status}`);
+        }
+
+        const answerSdp = await response.text();
+        const location = response.headers.get('Location');
+        whepSessionUrl = resolveSessionUrl(location, whepUrl);
+        if (whepSessionUrl) {
+          log(`whep session created: ${whepSessionUrl}`);
+        }
+        await conn.setRemoteDescription({
+          type: 'answer',
+          sdp: answerSdp,
+        });
+        note('success', 'WHEP 会话已建立', '播放器已经拿到服务端应答，接下来观察 ICE 和媒体状态即可。', 'whep playback started');
+      }
+
+      async function startSecondaryWhepPlayback(index) {
+        const whepUrl = remoteUrlInputs[index + 1].value.trim();
+        if (!whepUrl) {
+          note('warn', `缺少远端 ${index + 2} 地址`, '先填写一个可访问的 WHEP endpoint，再开始拉流。', `remote slot ${index + 2} whep url missing`);
+          return;
+        }
+
+        await stopSecondaryRemoteSession(index);
+        const slot = secondaryRemoteSessions[index];
+        const conn = new RTCPeerConnection({
+          iceServers: parseIceServers(),
+          iceTransportPolicy: forceRelayInput.checked ? 'relay' : 'all',
+        });
+        slot.pc = conn;
+        setRemoteMetric(index + 1, '连接中');
+        note('info', `远端 ${index + 2} 开始拉流`, '独立远端卡片正在发起 WHEP 播放请求。', `remote slot ${index + 2} whep playback start url=${whepUrl}`);
+
+        conn.ontrack = (event) => {
+          remoteVideoEls[index + 1].srcObject = event.streams[0];
+          bindVideoDiagnostics(remoteVideoEls[index + 1], `remote-slot-${index + 2}`);
+          log(`remote slot ${index + 2} stream bound tracks=${event.streams[0]?.getTracks().map((track) => track.kind).join(',') || '-'}`);
+        };
+
+        conn.oniceconnectionstatechange = () => {
+          const state = conn.iceConnectionState;
+          if (state === 'checking') {
+            setRemoteMetric(index + 1, '探测中');
+          } else if (state === 'connected' || state === 'completed') {
+            setRemoteMetric(index + 1, '已连接');
+          } else if (state === 'failed') {
+            setRemoteMetric(index + 1, '连接失败');
+          } else if (state === 'disconnected') {
+            setRemoteMetric(index + 1, '已断开');
+          }
+          log(`remote slot ${index + 2} iceConnectionState=${state}`);
+        };
+
+        conn.onconnectionstatechange = () => {
+          const state = conn.connectionState;
+          if (state === 'connected') {
+            setRemoteMetric(index + 1, '媒体已连接');
+          } else if (state === 'failed') {
+            setRemoteMetric(index + 1, '媒体失败');
+          }
+          log(`remote slot ${index + 2} connectionState=${state}`);
+        };
+
+        conn.onicecandidateerror = (event) => {
+          log(`remote slot ${index + 2} icecandidateerror url=${event.url || '-'} code=${event.errorCode || '-'} text=${event.errorText || '-'}`, 'warn');
+        };
+
+        const offer = await conn.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true,
+        });
+        await conn.setLocalDescription(offer);
+        const gatherResult = await waitForIceGatheringComplete(conn);
+        log(`remote slot ${index + 2} ICE gathering result=${gatherResult}`);
+
+        const response = await fetch(whepUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/sdp',
+          },
+          body: conn.localDescription.sdp,
+        });
+        if (!response.ok) {
+          throw new Error(`remote slot ${index + 2} WHEP request failed: ${response.status}`);
+        }
+
+        const answerSdp = await response.text();
+        const location = response.headers.get('Location');
+        slot.sessionUrl = resolveSessionUrl(location, whepUrl);
+        await conn.setRemoteDescription({
+          type: 'answer',
+          sdp: answerSdp,
+        });
+        startSecondaryRemoteStats(index);
+        setRemoteMetric(index + 1, '会话已建立');
+      }
+
+      async function startWhipPublish() {
+        const whipUrl = whipUrlInput.value.trim();
+        log(`startWhipPublish enter url=${whipUrl || '-'}`);
+        if (!whipUrl) {
+          note('warn', '缺少 WHIP 地址', '先填写一个可访问的 WHIP endpoint，再开始发布。', 'whip url missing');
+          return;
+        }
+
+        await resetPeerConnection();
+        releaseLocalStream();
+        log('startWhipPublish after resetPeerConnection');
+        joined = false;
+        roomId = null;
+        peers = [];
+        setText(peerStateEl, 'whip');
+
+        const conn = ensurePeerConnection({ sendCandidates: false });
+        log('startWhipPublish peer connection ready');
+        await attachLocalTracks();
+        log('startWhipPublish local tracks attached');
+        note('info', '开始 WHIP 发布', '当前推流端将直接把本地媒体发布到 MediaMTX，不再通过房间信令连接观看端。', `whip publish start url=${whipUrl}`);
+
+        const offer = await conn.createOffer({
+          offerToReceiveAudio: false,
+          offerToReceiveVideo: false,
+        });
+        log(`whip offer created sdpLength=${offer.sdp?.length || 0}`);
+        const limitedOffer = withVideoBitrateLimit(offer);
+        await conn.setLocalDescription(limitedOffer);
+        log('whip local description applied');
+        const gatherResult = await waitForIceGatheringComplete(conn, 2000);
+        log(`whip ICE gathering result=${gatherResult}`);
+
+        const response = await fetch(whipUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/sdp',
+          },
+          body: conn.localDescription.sdp,
+        });
+        log(`whip response status=${response.status}`);
+        if (!response.ok) {
+          throw new Error(`WHIP request failed: ${response.status}`);
+        }
+
+        const answerSdp = await response.text();
+        const location = response.headers.get('Location');
+        whipSessionUrl = resolveSessionUrl(location, whipUrl);
+        if (whipSessionUrl) {
+          log(`whip session created: ${whipSessionUrl}`);
+        }
+        await conn.setRemoteDescription({
+          type: 'answer',
+          sdp: answerSdp,
+        });
+        note('success', 'WHIP 发布已建立', 'MediaMTX 已经接受这路发布，接下来可以在 WHEP 播放页或公网反代地址上验证 online。', 'whip publish started');
       }
 
       async function makeOffer() {
@@ -1604,7 +2577,7 @@
               activePeerId = null;
               negotiationInFlight = false;
               if (pc && pc.signalingState === 'stable') {
-                resetPeerConnection();
+                await resetPeerConnection();
               }
             }
             setText(peerStateEl, peers[0] || 'waiting');
@@ -1664,11 +2637,35 @@
         };
       }
 
-      joinBtn.onclick = handleJoin;
-      joinBtnMobile.onclick = handleJoin;
+      joinBtn.onclick = async () => {
+        try {
+          await handleJoin();
+        } catch (error) {
+          note('error', '开始播放失败', error.message, `join/start failed: ${error.message}`);
+        }
+      };
+      joinBtnMobile.onclick = async () => {
+        try {
+          await handleJoin();
+        } catch (error) {
+          note('error', '开始播放失败', error.message, `join/start failed: ${error.message}`);
+        }
+      };
 
-      callBtn.onclick = handleCall;
-      callBtnMobile.onclick = handleCall;
+      callBtn.onclick = async () => {
+        try {
+          await handleCall();
+        } catch (error) {
+          note('error', isWhipPublishMode() ? '开始发布失败' : '开始连接失败', error.message, `call/start failed: ${error.message}`);
+        }
+      };
+      callBtnMobile.onclick = async () => {
+        try {
+          await handleCall();
+        } catch (error) {
+          note('error', isWhipPublishMode() ? '开始发布失败' : '开始连接失败', error.message, `call/start failed: ${error.message}`);
+        }
+      };
 
       copyBtn.onclick = async () => {
         const url = buildShareUrl();
@@ -1676,8 +2673,9 @@
         log(`share url copied: ${url}`);
       };
 
-      resetBtn.onclick = () => {
-        resetPeerConnection();
+      resetBtn.onclick = async () => {
+        await resetPeerConnection();
+        releaseLocalStream();
         log('peer connection reset');
       };
 
@@ -1703,9 +2701,26 @@
       });
 
       roomInput.addEventListener('input', syncUrlState);
+      whipUrlInput.addEventListener('input', syncUrlState);
+      remoteUrlInputs.forEach((input) => {
+        input.addEventListener('input', syncUrlState);
+      });
       videoBitrateInput.addEventListener('change', syncUrlState);
-      frameRateInput.addEventListener('input', syncUrlState);
-      videoHeightInput.addEventListener('change', syncUrlState);
+      frameRateInput.addEventListener('input', () => {
+        releaseLocalStream();
+        syncRoleUi();
+        syncUrlState();
+      });
+      videoHeightInput.addEventListener('change', () => {
+        releaseLocalStream();
+        syncRoleUi();
+        syncUrlState();
+      });
+      mediaSourceInput.addEventListener('change', () => {
+        releaseLocalStream();
+        syncRoleUi();
+        syncUrlState();
+      });
       videoBitrateInput.addEventListener('change', updateCapacityEstimate);
       serverBandwidthInput.addEventListener('change', updateCapacityEstimate);
       serverBandwidthInput.addEventListener('change', syncUrlState);
@@ -1713,10 +2728,41 @@
       turnOnlyInput.addEventListener('change', syncUrlState);
       turnUsernameInput.addEventListener('input', syncUrlState);
       turnCredentialInput.addEventListener('input', syncUrlState);
+      publishModeInput.addEventListener('change', () => {
+        releaseLocalStream();
+        syncRoleUi();
+        syncUrlState();
+      });
 
       renderTurnPresetOptions();
       bindVideoDiagnostics(localVideo, 'local');
       bindVideoDiagnostics(remoteVideo, 'remote');
+      remotePlayBtns[0].onclick = async () => {
+        try {
+          await startWhepPlayback();
+        } catch (error) {
+          note('error', '远端 1 播放失败', error.message, `remote slot 1 start failed: ${error.message}`);
+        }
+      };
+      remoteStopBtns[0].onclick = async () => {
+        await resetPrimaryPeerConnection();
+        log('remote slot 1 stopped');
+      };
+      remotePlayBtns.slice(1).forEach((button, index) => {
+        button.onclick = async () => {
+          try {
+            await startSecondaryWhepPlayback(index);
+          } catch (error) {
+            note('error', `远端 ${index + 2} 播放失败`, error.message, `remote slot ${index + 2} start failed: ${error.message}`);
+          }
+        };
+      });
+      remoteStopBtns.slice(1).forEach((button, index) => {
+        button.onclick = async () => {
+          await stopSecondaryRemoteSession(index);
+          log(`remote slot ${index + 2} stopped`);
+        };
+      });
       if (initialTurnPreset && turnPresets[initialTurnPreset] && !params.get('turnUrls')) {
         turnPresetInput.value = initialTurnPreset;
         applyTurnPreset(initialTurnPreset);

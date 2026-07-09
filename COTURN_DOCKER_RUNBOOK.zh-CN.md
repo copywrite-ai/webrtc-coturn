@@ -10,6 +10,37 @@
 
 本文档尽量采用“执行手册”写法，而不是概念说明写法。
 
+## 文档定位与派生关系
+
+本文件是 `coturn` 的基础部署手册，重点覆盖：
+
+- `coturn` Docker 部署
+- 监听端口与 relay 端口规划
+- 鉴权模式
+- 基础验证
+- 基础排障
+
+如果后续要在它的基础上扩展更完整的架构场景，例如：
+
+- `nginx + coturn + WHEP`
+- `mediamtx` 端侧回源
+- `Tailscale` 回源
+- 动态设备路径，例如 `/mtx/{device}/{stream}/whep`
+
+建议新增“扩展 runbook”，而不是直接把所有场景细节都堆进本文件。
+
+例如当前仓库中的：
+
+- [COTURN_NGINX_WHEP_RUNBOOK.zh-CN.md](/Users/peng/Documents/tunnel/COTURN_NGINX_WHEP_RUNBOOK.zh-CN.md)
+
+就属于建立在本文件之上的架构扩展文档。
+
+后续迭代建议遵循：
+
+1. 基础能力改动，优先更新本文件
+2. 场景化架构改动，更新扩展 runbook
+3. 新增内容尽量采用“增量章节”方式，而不是复制整份文档重写
+
 ## 1. 目标
 
 在一台具备公网访问能力的 Linux 主机上，使用 Docker 部署一个最小可用的 `coturn` 服务，供 WebRTC 客户端在直连失败时进行 TURN relay。

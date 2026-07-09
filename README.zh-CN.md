@@ -97,8 +97,8 @@ DEFAULT_ROOM=demo-room
 DEFAULT_TURN_URLS=turn:turn.example.com:3478?transport=udp,turn:turn.example.com:3478?transport=tcp
 DEFAULT_TURN_USERNAME=
 DEFAULT_TURN_CREDENTIAL=
-DEFAULT_WHIP_URL=http://localhost:8889/demo-stream/whip
-DEFAULT_WHEP_URL=http://localhost:8889/demo-stream/whep
+DEFAULT_WHIP_URL=/online/whip
+DEFAULT_WHEP_URL=/online/whep
 DEFAULT_FORCE_RELAY=1
 DEFAULT_TURN_ONLY=1
 DEFAULT_AUTO_START=1
@@ -123,16 +123,35 @@ http://localhost:9001/whep-player.html
 默认本地地址：
 
 ```text
-http://localhost:9001/mtx/demo-stream/whep
+http://localhost:9001/online/whip
+http://localhost:9001/online/whep
+```
+
+如果你要验证 `10 Mbps` 的 WebRTC 码率链路，可以先通过 WHIP 发布测试图，再通过 WHEP 播放：
+
+```bash
+./scripts/push-10m-whip-testsrc.sh
+```
+
+如果本机 FFmpeg 没有 `whip` muxer，可以改用 GStreamer：
+
+```bash
+./scripts/push-10m-whip-testsrc-gst.sh
+```
+
+然后打开：
+
+```text
+http://localhost:9001/?v=4
 ```
 
 建议本地验证顺序：
 
 1. 在浏览器或另一台设备打开 `/whep-player.html`。
 2. 如果网络受限，继续沿用当前项目里已经配置好的 TURN 参数。
-3. 直接播放内置的 `demo-stream`。
+3. 直接播放 `online` 流。
 
-页面会自动复用 `/config.js` 里的 TURN 默认值，所以你现有的 `coturn` 部署不需要改动。Web 应用还会把 `/mtx/*` 反代到本地 `MediaMTX`，因此 `tailscale serve` 只保留 `9001` 这一条入口就够了。如果 `MediaMTX` 使用宿主机网络，在 Docker Compose 里这个上游地址应为 `http://host.docker.internal:8889`。
+页面会自动复用 `/config.js` 里的 TURN 默认值，所以你现有的 `coturn` 部署不需要改动。Web 应用会把 `/online/*` 和 `/mtx/*` 反代到本地 `MediaMTX`，因此 `tailscale serve` 只保留 `9001` 这一条入口就够了。
 
 如果用 Docker Compose，项目根目录下存在 `.env` 时会自动读取。
 
