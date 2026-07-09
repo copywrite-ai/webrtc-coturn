@@ -16,8 +16,8 @@ if ! gst-inspect-1.0 whipclientsink >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! gst-inspect-1.0 textoverlay >/dev/null 2>&1; then
-  echo "GStreamer textoverlay plugin not found" >&2
+if ! gst-inspect-1.0 cairooverlay >/dev/null 2>&1; then
+  echo "GStreamer cairooverlay plugin not found" >&2
   exit 1
 fi
 

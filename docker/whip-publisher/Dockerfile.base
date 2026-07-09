@@ -1,15 +1,45 @@
 ARG UBUNTU_VERSION=24.04
 ARG BASE_IMAGE=docker.1ms.run/library/ubuntu:${UBUNTU_VERSION}
+ARG APT_MIRROR=http://mirrors.ustc.edu.cn
+ARG RUSTUP_DIST_SERVER=https://rsproxy.cn
+ARG RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup
+ARG CARGO_REGISTRIES_CRATES_IO_INDEX=sparse+https://rsproxy.cn/index/
+ARG CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 
 FROM ${BASE_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH=/root/.cargo/bin:${PATH}
 ENV GST_PLUGIN_PATH=/opt/gst-plugins-rs/lib/gstreamer-runtime
+ARG APT_MIRROR
+ARG RUSTUP_DIST_SERVER
+ARG RUSTUP_UPDATE_ROOT
+ARG CARGO_REGISTRIES_CRATES_IO_INDEX
+ARG CARGO_REGISTRIES_CRATES_IO_PROTOCOL
 
 ARG GST_PLUGINS_RS_REF=0.14.1
 
-RUN apt-get update \
+ENV RUSTUP_DIST_SERVER=${RUSTUP_DIST_SERVER}
+ENV RUSTUP_UPDATE_ROOT=${RUSTUP_UPDATE_ROOT}
+ENV CARGO_REGISTRIES_CRATES_IO_INDEX=${CARGO_REGISTRIES_CRATES_IO_INDEX}
+ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=${CARGO_REGISTRIES_CRATES_IO_PROTOCOL}
+
+RUN set -eux; \
+  if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+    sed -i \
+      -e "s|http://ports.ubuntu.com/ubuntu-ports|${APT_MIRROR}/ubuntu-ports|g" \
+      -e "s|http://archive.ubuntu.com/ubuntu|${APT_MIRROR}/ubuntu|g" \
+      -e "s|http://security.ubuntu.com/ubuntu|${APT_MIRROR}/ubuntu|g" \
+      /etc/apt/sources.list.d/ubuntu.sources; \
+  fi; \
+  if [ -f /etc/apt/sources.list ]; then \
+    sed -i \
+      -e "s|http://ports.ubuntu.com/ubuntu-ports|${APT_MIRROR}/ubuntu-ports|g" \
+      -e "s|http://archive.ubuntu.com/ubuntu|${APT_MIRROR}/ubuntu|g" \
+      -e "s|http://security.ubuntu.com/ubuntu|${APT_MIRROR}/ubuntu|g" \
+      /etc/apt/sources.list; \
+  fi; \
+  apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
@@ -21,7 +51,9 @@ RUN apt-get update \
     gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad \
     gstreamer1.0-plugins-ugly \
+    python3-cairo \
     python3-gi \
+    python3-gi-cairo \
     python3-gst-1.0 \
     libglib2.0-dev \
     libgstreamer1.0-dev \
@@ -34,6 +66,18 @@ RUN apt-get update \
     pkg-config \
     build-essential \
   && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /root/.cargo \
+  && printf '%s\n' \
+    '[source.crates-io]' \
+    "registry = \"${CARGO_REGISTRIES_CRATES_IO_INDEX}\"" \
+    '' \
+    '[registries.crates-io]' \
+    "protocol = \"${CARGO_REGISTRIES_CRATES_IO_PROTOCOL}\"" \
+    '' \
+    '[net]' \
+    'git-fetch-with-cli = true' \
+    > /root/.cargo/config.toml
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     | sh -s -- -y --profile minimal \
@@ -51,4 +95,4 @@ RUN git clone --depth 1 --branch "${GST_PLUGINS_RS_REF}" \
   && rm -rf /tmp/gst-plugins-rs
 
 RUN gst-inspect-1.0 whipclientsink >/dev/null \
-  && gst-inspect-1.0 textoverlay >/dev/null
+  && gst-inspect-1.0 cairooverlay >/dev/null

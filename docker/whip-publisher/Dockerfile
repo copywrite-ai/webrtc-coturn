@@ -7,11 +7,17 @@ FROM ${PUBLISHER_BASE_IMAGE}
 ARG UBUNTU_VERSION
 ARG GST_PLUGINS_RS_REF
 
+RUN set -eux; \
+  apt-get update \
+  && apt-get install -y --no-install-recommends python3-cairo python3-gi-cairo \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY publish-whip.sh /usr/local/bin/publish-whip.sh
 COPY publish-whip.py /usr/local/bin/publish-whip.py
 
 RUN chmod +x /usr/local/bin/publish-whip.sh /usr/local/bin/publish-whip.py \
+  && python3 -c 'import cairo; import gi' \
   && gst-inspect-1.0 whipclientsink >/dev/null \
-  && gst-inspect-1.0 textoverlay >/dev/null
+  && gst-inspect-1.0 cairooverlay >/dev/null
 
 ENTRYPOINT ["/usr/local/bin/publish-whip.sh"]
