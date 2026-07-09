@@ -45,6 +45,10 @@ services:
       WHIP_TURN_SERVER_2: "${WHIP_TURN_SERVER_2:-}"
       WHIP_FORCE_TURN: "${WHIP_FORCE_TURN:-0}"
       WHIP_SINK_EXTRA_ARGS: "${WHIP_SINK_EXTRA_ARGS:-}"
+      ORTM_X: "${ORTM_X:-24}"
+      ORTM_Y: "${ORTM_Y:-24}"
+      ORTM_CELL: "${ORTM_CELL:-12}"
+      ORTM_PADDING: "${ORTM_PADDING:-12}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped
 
@@ -77,6 +81,10 @@ services:
       WHIP_TURN_SERVER_2: "${WHIP_TURN_SERVER_2:-}"
       WHIP_FORCE_TURN: "${WHIP_FORCE_TURN:-0}"
       WHIP_SINK_EXTRA_ARGS: "${WHIP_SINK_EXTRA_ARGS:-}"
+      ORTM_X: "${ORTM_X:-24}"
+      ORTM_Y: "${ORTM_Y:-24}"
+      ORTM_CELL: "${ORTM_CELL:-12}"
+      ORTM_PADDING: "${ORTM_PADDING:-12}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped
 
@@ -109,6 +117,10 @@ services:
       WHIP_SINK_EXTRA_ARGS: "${WHIP_REMOTE_SINK_EXTRA_ARGS:-${WHIP_SINK_EXTRA_ARGS:-}}"
       PIPELINE_METRICS: "${PIPELINE_METRICS:-1}"
       PIPELINE_METRICS_INTERVAL_FRAMES: "${PIPELINE_METRICS_INTERVAL_FRAMES:-30}"
+      ORTM_X: "${ORTM_X:-24}"
+      ORTM_Y: "${ORTM_Y:-24}"
+      ORTM_CELL: "${ORTM_CELL:-12}"
+      ORTM_PADDING: "${ORTM_PADDING:-12}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped
 
@@ -141,6 +153,10 @@ services:
       WHIP_TURN_SERVER_2: "${WHIP_TURN_SERVER_2:-}"
       WHIP_FORCE_TURN: "${WHIP_FORCE_TURN:-0}"
       WHIP_SINK_EXTRA_ARGS: "${WHIP_SINK_EXTRA_ARGS:-}"
+      ORTM_X: "${ORTM_X:-24}"
+      ORTM_Y: "${ORTM_Y:-24}"
+      ORTM_CELL: "${ORTM_CELL:-12}"
+      ORTM_PADDING: "${ORTM_PADDING:-12}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped
 
@@ -173,5 +189,9 @@ services:
       WHIP_TURN_SERVER_2: "${WHIP_TURN_SERVER_2:-}"
       WHIP_FORCE_TURN: "${WHIP_FORCE_TURN:-0}"
       WHIP_SINK_EXTRA_ARGS: "${WHIP_SINK_EXTRA_ARGS:-}"
+      ORTM_X: "${ORTM_X:-24}"
+      ORTM_Y: "${ORTM_Y:-24}"
+      ORTM_CELL: "${ORTM_CELL:-12}"
+      ORTM_PADDING: "${ORTM_PADDING:-12}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped

@@ -1,0 +1,1034 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WHEP Quad Relay</title>
+    <script src="/config.js"></script>
+    <style>
+      :root {
+        --bg: #eef2f7;
+        --panel: #ffffff;
+        --line: rgba(15, 23, 42, 0.12);
+        --text: #0f172a;
+        --muted: #64748b;
+        --accent: #0f766e;
+        --accent-soft: #ccfbf1;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "SF Pro Display", "PingFang SC", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(15, 118, 110, 0.10), transparent 28%),
+          linear-gradient(180deg, #f8fafc 0%, var(--bg) 100%);
+      }
+      .wrap {
+        width: min(1480px, calc(100% - 24px));
+        margin: 20px auto 32px;
+        display: grid;
+        gap: 16px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 16px;
+      }
+      .toolbar {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 4px 10px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      h1, p, h2 {
+        margin: 0;
+      }
+      .subtle {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      button, input {
+        font: inherit;
+      }
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 14px;
+        cursor: pointer;
+        background: #dbeafe;
+      }
+      button.primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .grid {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .slot {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        overflow: hidden;
+        background: #fff;
+      }
+      .slot-head {
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .slot-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .status {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      input {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+      }
+      video {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #0f172a;
+        display: block;
+      }
+      .slot-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .metrics {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .log {
+        min-height: 160px;
+        max-height: 260px;
+        overflow: auto;
+        white-space: pre-wrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        line-height: 1.45;
+        padding: 12px;
+        border-radius: 14px;
+        background: #111827;
+        color: #e5e7eb;
+      }
+      @media (max-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="panel" style="display:grid; gap:12px;">
+        <div class="toolbar">
+          <span class="badge">Relay WHEP</span>
+          <span class="badge" id="buildBadge">Build --</span>
+          <h1>四路 Relay 播放</h1>
+        </div>
+        <p class="subtle">只做四路 WHEP relay 拉流。页面会读取 `/config.js` 里的 TURN 配置，并强制 `iceTransportPolicy = relay`。</p>
+        <div class="actions">
+          <button class="primary" id="startAllBtn">全部连接</button>
+          <button id="stopAllBtn">全部停止</button>
+        </div>
+      </section>
+
+      <section class="grid" id="slots"></section>
+
+      <section class="panel">
+        <h2>日志</h2>
+        <div id="log" class="log"></div>
+      </section>
+    </div>
+
+    <template id="slotTemplate">
+      <article class="slot">
+        <div class="slot-head">
+          <div class="slot-title">
+            <strong class="name"></strong>
+            <span class="status">idle</span>
+          </div>
+          <label>
+            WHEP 地址
+            <input class="url" />
+          </label>
+          <div class="slot-actions">
+            <button class="primary start">连接</button>
+            <button class="stop">停止</button>
+          </div>
+          <div class="metrics">
+            <span>ICE: <strong class="ice">idle</strong></span>
+            <span>分辨率: <strong class="resolution">--</strong></span>
+            <span>ORTM: <strong class="latency-ortm">--</strong></span>
+            <span>净ORTM: <strong class="latency-ortm-net">--</strong></span>
+            <span>Fallback: <strong class="latency-fallback">--</strong></span>
+            <span>前段: <strong class="latency-upstream">--</strong></span>
+            <span>净前段: <strong class="latency-upstream-net">--</strong></span>
+            <span>浏览器: <strong class="browser-cost">--</strong></span>
+          </div>
+        </div>
+        <video autoplay playsinline controls muted></video>
+      </article>
+    </template>
+
+    <script>
+      const BUILD_VERSION = '2026-07-09-whep-quad-relay-1';
+      const appConfig = window.APP_CONFIG || {};
+      const logEl = document.getElementById('log');
+      const slotsEl = document.getElementById('slots');
+      const template = document.getElementById('slotTemplate');
+      const buildBadgeEl = document.getElementById('buildBadge');
+      const params = new URLSearchParams(location.search);
+      buildBadgeEl.textContent = `Build ${BUILD_VERSION}`;
+      const clientLogEndpoint = '/client-log';
+      const clientLogPeerId = globalThis.crypto?.randomUUID?.() || `quad-${Date.now()}`;
+
+      const defaultUrls = [
+        params.get('whep1') || 'http://127.0.0.1:9001/fish_front/whep',
+        params.get('whep2') || '',
+        params.get('whep3') || '',
+        params.get('whep4') || '',
+      ];
+      const ORTM_CONFIG = {
+        x: 24,
+        y: 24,
+        cell: 12,
+        padding: 12,
+        gridSize: 32,
+        finderSize: 4,
+        timingIndex: 4,
+        scales: [1.0, 0.95, 1.05, 0.9, 1.1],
+        offsets: [0, -4, 4],
+      };
+      const ORTM_PAYLOAD_BITS = 4 + 16 + 32 + 16;
+      const ORTM_MAX_REASONABLE_LATENCY_MS = 5000;
+      const ORTM_DECODE_INTERVAL_MS = 500;
+      const ORTM_DECODE_MODE = 'rvfc';
+
+      function splitTurnUrls(value) {
+        return String(value || '')
+          .split(/[\n,]/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+
+      function resolveRelayConfig() {
+        const presetName = params.get('turnPreset');
+        const preset = presetName ? appConfig.turnPresets?.[presetName] : null;
+        const urls = splitTurnUrls(
+          params.get('turnUrls') ||
+          (preset?.urls || []).join(',') ||
+          (appConfig.defaultTurnUrls || []).join(',')
+        );
+        return {
+          urls,
+          username: params.get('turnUsername') || preset?.username || appConfig.defaultTurnUsername || '',
+          credential: params.get('turnCredential') || preset?.credential || appConfig.defaultTurnCredential || '',
+          presetName: presetName || '',
+        };
+      }
+
+      const relayConfig = resolveRelayConfig();
+
+      function parseIceServers() {
+        if (!relayConfig.urls.length) {
+          return [];
+        }
+        const server = { urls: relayConfig.urls };
+        if (relayConfig.username) server.username = relayConfig.username;
+        if (relayConfig.credential) server.credential = relayConfig.credential;
+        return [server];
+      }
+
+      function log(message) {
+        const line = `${new Date().toISOString()} ${message}`;
+        logEl.textContent += `${line}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+        console.log(line);
+      }
+
+      function queueClientLog(entry) {
+        const payload = JSON.stringify({
+          peerId: clientLogPeerId,
+          page: location.href,
+          ...entry,
+        });
+        fetch(clientLogEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {});
+      }
+
+      function crc16CcittFalse(bytes) {
+        let crc = 0xffff;
+        for (const byte of bytes) {
+          crc ^= byte << 8;
+          for (let index = 0; index < 8; index += 1) {
+            if (crc & 0x8000) {
+              crc = ((crc << 1) ^ 0x1021) & 0xffff;
+            } else {
+              crc = (crc << 1) & 0xffff;
+            }
+          }
+        }
+        return crc;
+      }
+
+      function ortmInFinder(row, col) {
+        const { finderSize, gridSize } = ORTM_CONFIG;
+        return (
+          (row < finderSize && col < finderSize) ||
+          (row < finderSize && col >= gridSize - finderSize) ||
+          (row >= gridSize - finderSize && col < finderSize) ||
+          (row >= gridSize - finderSize && col >= gridSize - finderSize)
+        );
+      }
+
+      function ortmIsReservedCell(row, col) {
+        return ortmInFinder(row, col) || row === ORTM_CONFIG.timingIndex || col === ORTM_CONFIG.timingIndex;
+      }
+
+      function ortmExpectedFinderBit(localRow, localCol) {
+        return localRow === 0 || localRow === ORTM_CONFIG.finderSize - 1 || localCol === 0 || localCol === ORTM_CONFIG.finderSize - 1 ? 1 : 0;
+      }
+
+      function ortmBitsToNumber(bits, offset, width) {
+        let value = 0;
+        for (let index = 0; index < width; index += 1) {
+          value = (value << 1) | bits[offset + index];
+        }
+        return value >>> 0;
+      }
+
+      function buildOrtmCandidates() {
+        const candidates = [];
+        for (const scale of ORTM_CONFIG.scales) {
+          for (const dx of ORTM_CONFIG.offsets) {
+            for (const dy of ORTM_CONFIG.offsets) {
+              const cell = ORTM_CONFIG.cell * scale;
+              const padding = ORTM_CONFIG.padding * scale;
+              const markerSize = ORTM_CONFIG.gridSize * cell;
+              candidates.push({
+                scale,
+                dx,
+                dy,
+                x: ORTM_CONFIG.x + dx,
+                y: ORTM_CONFIG.y + dy,
+                cell,
+                padding,
+                markerSize,
+                boxSize: markerSize + padding * 2,
+              });
+            }
+          }
+        }
+        return candidates;
+      }
+
+      const ORTM_CANDIDATES = buildOrtmCandidates();
+
+      function ortmSampleCellLuma(imageData, frameWidth, frameHeight, candidate, row, col) {
+        const positions = [0.2, 0.5, 0.8];
+        const originX = candidate.x + candidate.padding + col * candidate.cell;
+        const originY = candidate.y + candidate.padding + row * candidate.cell;
+        let total = 0;
+        let count = 0;
+        for (const px of positions) {
+          for (const py of positions) {
+            const x = Math.round(originX + candidate.cell * px);
+            const y = Math.round(originY + candidate.cell * py);
+            if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) {
+              continue;
+            }
+            const offset = (y * frameWidth + x) * 4;
+            const r = imageData.data[offset];
+            const g = imageData.data[offset + 1];
+            const b = imageData.data[offset + 2];
+            total += 0.299 * r + 0.587 * g + 0.114 * b;
+            count += 1;
+          }
+        }
+        return count ? total / count : NaN;
+      }
+
+      function decodeOrtmFromImageData(imageData, frameWidth, frameHeight, nowMs) {
+        let bestFailure = null;
+
+        for (const candidate of ORTM_CANDIDATES) {
+          if (
+            candidate.x < 0 ||
+            candidate.y < 0 ||
+            candidate.x + candidate.boxSize > frameWidth ||
+            candidate.y + candidate.boxSize > frameHeight
+          ) {
+            continue;
+          }
+
+          const lumaGrid = Array.from({ length: ORTM_CONFIG.gridSize }, () => new Array(ORTM_CONFIG.gridSize).fill(255));
+          let minLuma = Infinity;
+          let maxLuma = -Infinity;
+          let invalid = false;
+
+          for (let row = 0; row < ORTM_CONFIG.gridSize && !invalid; row += 1) {
+            for (let col = 0; col < ORTM_CONFIG.gridSize; col += 1) {
+              const luma = ortmSampleCellLuma(imageData, frameWidth, frameHeight, candidate, row, col);
+              if (!Number.isFinite(luma)) {
+                invalid = true;
+                break;
+              }
+              lumaGrid[row][col] = luma;
+              minLuma = Math.min(minLuma, luma);
+              maxLuma = Math.max(maxLuma, luma);
+            }
+          }
+
+          if (invalid) {
+            continue;
+          }
+
+          const threshold = (minLuma + maxLuma) / 2;
+          const contrast = maxLuma - minLuma;
+          const bitGrid = lumaGrid.map((row) => row.map((luma) => (luma < threshold ? 1 : 0)));
+          let finderErrors = 0;
+          let timingErrors = 0;
+
+          for (let row = 0; row < ORTM_CONFIG.gridSize; row += 1) {
+            for (let col = 0; col < ORTM_CONFIG.gridSize; col += 1) {
+              if (ortmInFinder(row, col)) {
+                const localRow = row < ORTM_CONFIG.finderSize ? row : row - (ORTM_CONFIG.gridSize - ORTM_CONFIG.finderSize);
+                const localCol = col < ORTM_CONFIG.finderSize ? col : col - (ORTM_CONFIG.gridSize - ORTM_CONFIG.finderSize);
+                if (bitGrid[row][col] !== ortmExpectedFinderBit(localRow, localCol)) {
+                  finderErrors += 1;
+                }
+              } else if (row === ORTM_CONFIG.timingIndex) {
+                if (bitGrid[row][col] !== (col % 2)) {
+                  timingErrors += 1;
+                }
+              } else if (col === ORTM_CONFIG.timingIndex) {
+                if (bitGrid[row][col] !== (row % 2)) {
+                  timingErrors += 1;
+                }
+              }
+            }
+          }
+
+          const score = finderErrors * 4 + timingErrors * 2 - contrast / 32;
+          const failureBase = {
+            ok: false,
+            score,
+            finder_errors: finderErrors,
+            timing_errors: timingErrors,
+            threshold,
+            contrast,
+            candidate,
+          };
+
+          if (finderErrors > 8 || timingErrors > 10 || contrast < 32) {
+            const failure = {
+              ...failureBase,
+              reason: finderErrors > 8 || timingErrors > 10 ? 'structure-mismatch' : 'low-contrast',
+            };
+            if (!bestFailure || failure.score < bestFailure.score) {
+              bestFailure = failure;
+            }
+            continue;
+          }
+
+          const payloadBits = [];
+          for (let row = 0; row < ORTM_CONFIG.gridSize; row += 1) {
+            for (let col = 0; col < ORTM_CONFIG.gridSize; col += 1) {
+              if (ortmIsReservedCell(row, col)) continue;
+              payloadBits.push(bitGrid[row][col]);
+            }
+          }
+
+          if (payloadBits.length < ORTM_PAYLOAD_BITS) {
+            const failure = { ...failureBase, reason: 'payload-short' };
+            if (!bestFailure || failure.score < bestFailure.score) {
+              bestFailure = failure;
+            }
+            continue;
+          }
+
+          const version = ortmBitsToNumber(payloadBits, 0, 4);
+          const frameSeq = ortmBitsToNumber(payloadBits, 4, 16);
+          const timestampMs = ortmBitsToNumber(payloadBits, 20, 32);
+          const crc16 = ortmBitsToNumber(payloadBits, 52, 16);
+          const expectedCrc16 = crc16CcittFalse(new Uint8Array([
+            version & 0x0f,
+            (frameSeq >>> 8) & 0xff,
+            frameSeq & 0xff,
+            (timestampMs >>> 24) & 0xff,
+            (timestampMs >>> 16) & 0xff,
+            (timestampMs >>> 8) & 0xff,
+            timestampMs & 0xff,
+          ]));
+
+          if (crc16 !== expectedCrc16) {
+            const failure = { ...failureBase, reason: 'crc-mismatch' };
+            if (!bestFailure || failure.score < bestFailure.score) {
+              bestFailure = failure;
+            }
+            continue;
+          }
+
+          const latencyMs = ((nowMs >>> 0) - timestampMs) >>> 0;
+          if (latencyMs < 0 || latencyMs >= ORTM_MAX_REASONABLE_LATENCY_MS) {
+            const failure = { ...failureBase, reason: 'latency-out-of-range' };
+            if (!bestFailure || failure.score < bestFailure.score) {
+              bestFailure = failure;
+            }
+            continue;
+          }
+
+          return {
+            ok: true,
+            version,
+            frame_seq: frameSeq,
+            timestamp_ms: timestampMs,
+            latency_ms: latencyMs,
+            finder_errors: finderErrors,
+            timing_errors: timingErrors,
+            threshold,
+            contrast,
+            candidate,
+          };
+        }
+
+        return bestFailure || {
+          ok: false,
+          reason: 'no-candidate',
+          score: Infinity,
+          finder_errors: null,
+          timing_errors: null,
+          threshold: null,
+          contrast: null,
+        };
+      }
+
+      function absoluteUrl(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        return new URL(raw, window.location.href).toString();
+      }
+
+      function waitForIceGatheringComplete(pc) {
+        if (pc.iceGatheringState === 'complete') {
+          return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+          const handler = () => {
+            if (pc.iceGatheringState === 'complete') {
+              pc.removeEventListener('icegatheringstatechange', handler);
+              resolve();
+            }
+          };
+          pc.addEventListener('icegatheringstatechange', handler);
+        });
+      }
+
+      function makeSlot(name, urlValue) {
+        const node = template.content.firstElementChild.cloneNode(true);
+        const nameEl = node.querySelector('.name');
+        const statusEl = node.querySelector('.status');
+        const urlEl = node.querySelector('.url');
+        const startBtn = node.querySelector('.start');
+        const stopBtn = node.querySelector('.stop');
+        const iceEl = node.querySelector('.ice');
+        const resolutionEl = node.querySelector('.resolution');
+        const ortmLatencyEl = node.querySelector('.latency-ortm');
+        const ortmNetLatencyEl = node.querySelector('.latency-ortm-net');
+        const fallbackLatencyEl = node.querySelector('.latency-fallback');
+        const upstreamLatencyEl = node.querySelector('.latency-upstream');
+        const upstreamNetLatencyEl = node.querySelector('.latency-upstream-net');
+        const browserCostEl = node.querySelector('.browser-cost');
+        const videoEl = node.querySelector('video');
+
+        nameEl.textContent = name;
+        urlEl.value = absoluteUrl(urlValue);
+        urlEl.placeholder = 'http://127.0.0.1:9001/fish_front/whep';
+
+        const state = {
+          name,
+          pc: null,
+          sessionUrl: null,
+          statsTimer: null,
+          decodeTimer: null,
+          decodeFrameCallbackId: null,
+          decodeCanvas: document.createElement('canvas'),
+          decodeCtx: null,
+          ortmLastSuccessAt: 0,
+          ortmLastResult: null,
+          ortmLastFailureReason: null,
+          ortmLastLoggedFrameSeq: null,
+          lastMetricLogLine: null,
+          browserPerf: {
+            count: 0,
+            drawMsTotal: 0,
+            readbackMsTotal: 0,
+            decodeMsTotal: 0,
+          },
+        };
+        state.decodeCtx = state.decodeCanvas.getContext('2d', { willReadFrequently: true });
+
+        function setStatus(text) {
+          statusEl.textContent = text;
+        }
+
+        function parseMetricMs(text) {
+          const match = String(text || '').match(/(\d+(?:\.\d+)?)/);
+          return match ? Number(match[1]) : NaN;
+        }
+
+        function updateDerivedLatency() {
+          const ortmMs = state.ortmLastResult?.latency_ms;
+          const fallbackMs = parseMetricMs(fallbackLatencyEl.textContent);
+          const browserMs = state.browserPerf.count
+            ? (state.browserPerf.drawMsTotal + state.browserPerf.readbackMsTotal + state.browserPerf.decodeMsTotal) / state.browserPerf.count
+            : NaN;
+          if (Number.isFinite(ortmMs) && Number.isFinite(fallbackMs) && ortmMs >= fallbackMs) {
+            upstreamLatencyEl.textContent = `${Math.round(ortmMs - fallbackMs)} ms`;
+          } else {
+            upstreamLatencyEl.textContent = '--';
+          }
+          if (Number.isFinite(ortmMs) && Number.isFinite(browserMs) && ortmMs >= browserMs) {
+            ortmNetLatencyEl.textContent = `${Math.round(ortmMs - browserMs)} ms`;
+          } else {
+            ortmNetLatencyEl.textContent = '--';
+          }
+          const upstreamMs = parseMetricMs(upstreamLatencyEl.textContent);
+          if (Number.isFinite(upstreamMs) && Number.isFinite(browserMs) && upstreamMs >= browserMs) {
+            upstreamNetLatencyEl.textContent = `${Math.round(upstreamMs - browserMs)} ms`;
+          } else {
+            upstreamNetLatencyEl.textContent = '--';
+          }
+        }
+
+        function emitMetricLog() {
+          const browserPerf = state.browserPerf.count
+            ? `browser=${browserCostEl.textContent || '--'} draw=${(state.browserPerf.drawMsTotal / state.browserPerf.count).toFixed(1)}ms read=${(state.browserPerf.readbackMsTotal / state.browserPerf.count).toFixed(1)}ms decode=${(state.browserPerf.decodeMsTotal / state.browserPerf.count).toFixed(1)}ms`
+            : 'browser=-- draw=-- read=-- decode=--';
+          const line = [
+            `slot=${name}`,
+            `ice=${iceEl.textContent || 'idle'}`,
+            `resolution=${resolutionEl.textContent || '--'}`,
+            `ortm=${ortmLatencyEl.textContent || '--'}`,
+            `ortmNet=${ortmNetLatencyEl.textContent || '--'}`,
+            `fallback=${fallbackLatencyEl.textContent || '--'}`,
+            `upstream=${upstreamLatencyEl.textContent || '--'}`,
+            `upstreamNet=${upstreamNetLatencyEl.textContent || '--'}`,
+            `decodeMode=${state.decodeMode || ORTM_DECODE_MODE}`,
+            browserPerf,
+            `status=${statusEl.textContent || '--'}`,
+          ].join(' ');
+          if (line === state.lastMetricLogLine) {
+            return;
+          }
+          state.lastMetricLogLine = line;
+          queueClientLog({
+            group: 'metrics',
+            level: 'info',
+            message: line,
+          });
+        }
+
+        function stopDecoder() {
+          if (state.decodeTimer) {
+            clearInterval(state.decodeTimer);
+            state.decodeTimer = null;
+          }
+          if (
+            state.decodeFrameCallbackId != null &&
+            typeof videoEl.cancelVideoFrameCallback === 'function'
+          ) {
+            videoEl.cancelVideoFrameCallback(state.decodeFrameCallbackId);
+          }
+          state.decodeFrameCallbackId = null;
+          state.ortmLastSuccessAt = 0;
+          state.ortmLastResult = null;
+          state.ortmLastFailureReason = null;
+          state.ortmLastLoggedFrameSeq = null;
+          state.lastMetricLogLine = null;
+          state.decodeMode = ORTM_DECODE_MODE;
+          state.browserPerf = {
+            count: 0,
+            drawMsTotal: 0,
+            readbackMsTotal: 0,
+            decodeMsTotal: 0,
+          };
+          ortmLatencyEl.textContent = '--';
+          ortmNetLatencyEl.textContent = '--';
+          upstreamLatencyEl.textContent = '--';
+          upstreamNetLatencyEl.textContent = '--';
+          browserCostEl.textContent = '--';
+        }
+
+        function updateLatencyFromOrtm() {
+          if (
+            !state.decodeCtx ||
+            !videoEl.videoWidth ||
+            !videoEl.videoHeight ||
+            videoEl.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+          ) {
+            return;
+          }
+          const width = videoEl.videoWidth;
+          const height = videoEl.videoHeight;
+          if (state.decodeCanvas.width !== width) state.decodeCanvas.width = width;
+          if (state.decodeCanvas.height !== height) state.decodeCanvas.height = height;
+          const drawStartedAt = performance.now();
+          state.decodeCtx.drawImage(videoEl, 0, 0, width, height);
+          const drawFinishedAt = performance.now();
+          const imageData = state.decodeCtx.getImageData(0, 0, width, height);
+          const readbackFinishedAt = performance.now();
+          const result = decodeOrtmFromImageData(imageData, width, height, Date.now());
+          const decodeFinishedAt = performance.now();
+          const drawMs = drawFinishedAt - drawStartedAt;
+          const readbackMs = readbackFinishedAt - drawFinishedAt;
+          const decodeMs = decodeFinishedAt - readbackFinishedAt;
+          state.browserPerf.count += 1;
+          state.browserPerf.drawMsTotal += drawMs;
+          state.browserPerf.readbackMsTotal += readbackMs;
+          state.browserPerf.decodeMsTotal += decodeMs;
+          const avgDrawMs = state.browserPerf.drawMsTotal / state.browserPerf.count;
+          const avgReadbackMs = state.browserPerf.readbackMsTotal / state.browserPerf.count;
+          const avgDecodeMs = state.browserPerf.decodeMsTotal / state.browserPerf.count;
+          browserCostEl.textContent = `${(avgDrawMs + avgReadbackMs + avgDecodeMs).toFixed(1)} ms`;
+
+          if (result.ok) {
+            state.ortmLastSuccessAt = performance.now();
+            state.ortmLastResult = result;
+            ortmLatencyEl.textContent = `${Math.round(result.latency_ms)} ms`;
+            updateDerivedLatency();
+            const shouldLogSuccess =
+              state.ortmLastLoggedFrameSeq == null ||
+              (((result.frame_seq - state.ortmLastLoggedFrameSeq) + 65536) % 65536) >= 30;
+            if (shouldLogSuccess) {
+              log(
+                `${name} ORTM ok seq=${result.frame_seq} latency=${Math.round(result.latency_ms)}ms finder=${result.finder_errors} timing=${result.timing_errors} contrast=${result.contrast.toFixed(1)}`
+              );
+              state.ortmLastLoggedFrameSeq = result.frame_seq;
+            }
+            state.ortmLastFailureReason = null;
+          } else if (state.ortmLastFailureReason !== result.reason && performance.now() - state.ortmLastSuccessAt > 1500) {
+            log(
+              `${name} ORTM fail reason=${result.reason} score=${Number.isFinite(result.score) ? result.score.toFixed(1) : 'inf'} finder=${result.finder_errors ?? '--'} timing=${result.timing_errors ?? '--'} contrast=${result.contrast == null ? '--' : result.contrast.toFixed(1)}`
+            );
+            state.ortmLastFailureReason = result.reason;
+          }
+        }
+
+        function startDecoder() {
+          stopDecoder();
+          state.decodeMode = (
+            ORTM_DECODE_MODE === 'rvfc' &&
+            typeof videoEl.requestVideoFrameCallback === 'function'
+          ) ? 'rvfc' : 'interval';
+          if (state.decodeMode === 'rvfc') {
+            const onVideoFrame = () => {
+              state.decodeFrameCallbackId = null;
+              try {
+                updateLatencyFromOrtm();
+              } catch (error) {
+                const reason = `decode-error:${error.message}`;
+                if (state.ortmLastFailureReason !== reason) {
+                  state.ortmLastFailureReason = reason;
+                  log(`${name} ORTM decode error: ${error.message}`);
+                }
+              }
+              if (state.pc && videoEl.srcObject) {
+                state.decodeFrameCallbackId = videoEl.requestVideoFrameCallback(onVideoFrame);
+              }
+            };
+            state.decodeFrameCallbackId = videoEl.requestVideoFrameCallback(onVideoFrame);
+            return;
+          }
+          state.decodeTimer = setInterval(() => {
+            try {
+              updateLatencyFromOrtm();
+            } catch (error) {
+              const reason = `decode-error:${error.message}`;
+              if (state.ortmLastFailureReason !== reason) {
+                state.ortmLastFailureReason = reason;
+                log(`${name} ORTM decode error: ${error.message}`);
+              }
+            }
+          }, ORTM_DECODE_INTERVAL_MS);
+        }
+
+        async function stop() {
+          if (state.statsTimer) {
+            clearInterval(state.statsTimer);
+            state.statsTimer = null;
+          }
+          stopDecoder();
+          if (state.sessionUrl) {
+            try {
+              await fetch(state.sessionUrl, { method: 'DELETE' });
+              log(`${name} deleted session ${state.sessionUrl}`);
+            } catch (error) {
+              log(`${name} delete session failed: ${error.message}`);
+            }
+          }
+          state.sessionUrl = null;
+          if (state.pc) {
+            state.pc.close();
+            state.pc = null;
+          }
+          videoEl.srcObject = null;
+          iceEl.textContent = 'idle';
+          resolutionEl.textContent = '--';
+          ortmLatencyEl.textContent = '--';
+          ortmNetLatencyEl.textContent = '--';
+          fallbackLatencyEl.textContent = '--';
+          upstreamLatencyEl.textContent = '--';
+          upstreamNetLatencyEl.textContent = '--';
+          browserCostEl.textContent = '--';
+          state.lastMetricLogLine = null;
+          setStatus('stopped');
+          emitMetricLog();
+        }
+
+        async function start() {
+          await stop();
+
+          const whepUrl = absoluteUrl(urlEl.value);
+          if (!whepUrl) {
+            setStatus('missing url');
+            return;
+          }
+
+          if (!relayConfig.urls.length) {
+            setStatus('missing turn');
+            log(`${name} missing TURN config`);
+            return;
+          }
+
+          const pc = new RTCPeerConnection({
+            iceServers: parseIceServers(),
+            iceTransportPolicy: 'relay',
+          });
+          state.pc = pc;
+          setStatus('connecting');
+          log(`${name} start url=${whepUrl} relayPreset=${relayConfig.presetName || 'default'} turnUrls=${relayConfig.urls.join(',')}`);
+
+          pc.addTransceiver('video', { direction: 'recvonly' });
+
+          pc.ontrack = (event) => {
+            videoEl.srcObject = event.streams[0];
+            try {
+              if (event.receiver && 'playoutDelayHint' in event.receiver) {
+                event.receiver.playoutDelayHint = 0;
+                log(`${name} playoutDelayHint=0`);
+              }
+            } catch (error) {
+              log(`${name} playoutDelayHint failed: ${error.message}`);
+            }
+            startDecoder();
+            setStatus('playing');
+            log(`${name} remote track received`);
+          };
+
+          pc.oniceconnectionstatechange = () => {
+            iceEl.textContent = pc.iceConnectionState;
+            log(`${name} ICE=${pc.iceConnectionState}`);
+          };
+
+          pc.onconnectionstatechange = () => {
+            log(`${name} PC=${pc.connectionState}`);
+          };
+
+          pc.onicegatheringstatechange = () => {
+            log(`${name} gathering=${pc.iceGatheringState}`);
+          };
+
+          pc.onsignalingstatechange = () => {
+            log(`${name} signaling=${pc.signalingState}`);
+          };
+
+          const offer = await pc.createOffer();
+          log(`${name} offer created`);
+          await pc.setLocalDescription(offer);
+          log(`${name} local description set`);
+          await waitForIceGatheringComplete(pc);
+          log(`${name} local ICE gathering complete`);
+
+          const localSdp = pc.localDescription?.sdp || '';
+          const localCandidates = Array.from(localSdp.matchAll(/^a=candidate:.*$/gm)).map((match) => match[0]);
+          log(`${name} local candidates=${localCandidates.length}`);
+          localCandidates.forEach((line, index) => log(`${name} local candidate[${index}] ${line}`));
+
+          const response = await fetch(whepUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/sdp',
+            },
+            body: pc.localDescription.sdp,
+          });
+
+          log(`${name} WHEP POST status=${response.status}`);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`WHEP request failed: ${response.status} body=${errorText.slice(0, 300)}`);
+          }
+
+          const location = response.headers.get('Location');
+          const answerSdp = await response.text();
+          const remoteCandidates = Array.from(answerSdp.matchAll(/^a=candidate:.*$/gm)).map((match) => match[0]);
+          log(`${name} remote location=${location || '<none>'}`);
+          log(`${name} remote candidates=${remoteCandidates.length}`);
+          remoteCandidates.forEach((line, index) => log(`${name} remote candidate[${index}] ${line}`));
+          state.sessionUrl = location ? new URL(location, whepUrl).toString() : null;
+          await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+          pc.getReceivers().forEach((receiver, index) => {
+            try {
+              if ('playoutDelayHint' in receiver) {
+                receiver.playoutDelayHint = 0;
+                log(`${name} receiver[${index}] playoutDelayHint=0`);
+              }
+            } catch (error) {
+              log(`${name} receiver[${index}] playoutDelayHint failed: ${error.message}`);
+            }
+          });
+          log(`${name} playback started url=${whepUrl}`);
+
+          state.statsTimer = setInterval(async () => {
+            if (!state.pc) return;
+            const tracks = videoEl.videoWidth && videoEl.videoHeight
+              ? `${videoEl.videoWidth}x${videoEl.videoHeight}`
+              : '--';
+            resolutionEl.textContent = tracks;
+            try {
+              const stats = await state.pc.getStats();
+              let inbound = null;
+              stats.forEach((report) => {
+                if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                  inbound = report;
+                }
+              });
+              if (
+                state.ortmLastResult &&
+                performance.now() - state.ortmLastSuccessAt < 1500 &&
+                typeof state.ortmLastResult.latency_ms === 'number'
+              ) {
+                ortmLatencyEl.textContent = `${Math.round(state.ortmLastResult.latency_ms)} ms`;
+              } else {
+                ortmLatencyEl.textContent = '--';
+              }
+              if (
+                inbound &&
+                typeof inbound.estimatedPlayoutTimestamp === 'number' &&
+                typeof inbound.lastPacketReceivedTimestamp === 'number'
+              ) {
+                const directMs = inbound.estimatedPlayoutTimestamp - inbound.lastPacketReceivedTimestamp;
+                if (Number.isFinite(directMs) && directMs >= 0 && directMs < 60000) {
+                  fallbackLatencyEl.textContent = `${directMs.toFixed(0)} ms`;
+                  updateDerivedLatency();
+                  return;
+                }
+              }
+              if (inbound && typeof inbound.jitterBufferDelay === 'number' && typeof inbound.jitterBufferEmittedCount === 'number' && inbound.jitterBufferEmittedCount > 0) {
+                const avgMs = inbound.jitterBufferDelay / inbound.jitterBufferEmittedCount * 1000;
+                fallbackLatencyEl.textContent = `${avgMs.toFixed(0)} ms`;
+              } else {
+                fallbackLatencyEl.textContent = '--';
+              }
+              updateDerivedLatency();
+              emitMetricLog();
+            } catch (error) {
+              fallbackLatencyEl.textContent = 'err';
+              updateDerivedLatency();
+              emitMetricLog();
+            }
+          }, 1000);
+        }
+
+        startBtn.addEventListener('click', async () => {
+          try {
+            await start();
+          } catch (error) {
+            setStatus('error');
+            log(`${name} ${error.message}`);
+          }
+        });
+
+        stopBtn.addEventListener('click', () => {
+          stop().catch((error) => log(`${name} stop failed: ${error.message}`));
+        });
+
+        return { node, start, stop };
+      }
+
+      const slots = [
+        makeSlot('Front', defaultUrls[0]),
+        makeSlot('Back', defaultUrls[1]),
+        makeSlot('Left', defaultUrls[2]),
+        makeSlot('Right', defaultUrls[3]),
+      ];
+
+      slots.forEach((slot) => slotsEl.appendChild(slot.node));
+
+      document.getElementById('startAllBtn').addEventListener('click', async () => {
+        for (const slot of slots) {
+          try {
+            await slot.start();
+          } catch (error) {
+            log(`start all failed: ${error.message}`);
+          }
+        }
+      });
+
+      document.getElementById('stopAllBtn').addEventListener('click', async () => {
+        for (const slot of slots) {
+          try {
+            await slot.stop();
+          } catch (error) {
+            log(`stop all failed: ${error.message}`);
+          }
+        }
+      });
+
+      log('quad relay viewer ready');
+    </script>
+  </body>
+</html>
