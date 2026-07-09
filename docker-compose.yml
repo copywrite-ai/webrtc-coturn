@@ -29,8 +29,12 @@ services:
       DEFAULT_FORCE_RELAY: "${DEFAULT_FORCE_RELAY:-1}"
       DEFAULT_TURN_ONLY: "${DEFAULT_TURN_ONLY:-1}"
       DEFAULT_AUTO_START: "${DEFAULT_AUTO_START:-1}"
+      CLIENT_LOG_PATH: "/app/logs/client-events.log"
     depends_on:
       - mediamtx
+    volumes:
+      - ./public:/app/public:ro
+      - ./logs:/app/logs
     ports:
       - "${PORT:-9001}:${PORT:-9001}"
 

@@ -169,6 +169,7 @@ class ORTMOverlayRenderer:
         self.timezone = timezone
         self.draw_timestamp_text = draw_timestamp_text
         self.render_stats = StatsWindow()
+        self.frame_markers = deque()
 
     @property
     def marker_size(self):
@@ -235,6 +236,16 @@ class ORTMOverlayRenderer:
             context.restore()
 
         render_ms = (monotonic_ns() - started_at) / 1_000_000.0
+        self.frame_markers.append(
+            {
+                "frame_seq": current_frame_seq,
+                "timestamp_ms_full": timestamp_ms_full,
+                "render_ms": render_ms,
+                "overlay_done_monotonic_ns": monotonic_ns(),
+            }
+        )
+        if len(self.frame_markers) > 180:
+            self.frame_markers.popleft()
         self.render_stats.add(render_ms)
         if self.render_stats.count % self.metrics_interval_frames == 0:
             print(
@@ -308,6 +319,7 @@ def main():
     timestamp_tz = ZoneInfo(timestamp_tz_name)
     metrics_enabled = env_value("PIPELINE_METRICS", "1")
     metrics_interval_frames = env_int("PIPELINE_METRICS_INTERVAL_FRAMES", 30)
+    sender_frame_log_interval = env_int("SENDER_FRAME_LOG_INTERVAL", 30)
     ortm_x = env_int("ORTM_X", 24)
     ortm_y = env_int("ORTM_Y", 24)
     ortm_cell = env_int("ORTM_CELL", 12)
@@ -436,6 +448,9 @@ def main():
 
             started_at = overlay_frame_times.popleft()
             delay_ms = (monotonic_ns() - started_at) / 1_000_000.0
+            frame_marker = (
+                renderer.frame_markers.popleft() if renderer.frame_markers else None
+            )
             overlay_send_stats["count"] += 1
             overlay_send_stats["total_ms"] += delay_ms
             overlay_send_stats["min_ms"] = (
@@ -448,6 +463,23 @@ def main():
                 if overlay_send_stats["max_ms"] is None
                 else max(overlay_send_stats["max_ms"], delay_ms)
             )
+
+            if (
+                frame_marker is not None
+                and overlay_send_stats["count"] % max(sender_frame_log_interval, 1) == 0
+            ):
+                sender_now_ms = wallclock_ms()
+                sender_pipeline_ms = sender_now_ms - frame_marker["timestamp_ms_full"]
+                print(
+                    "SENDER frame "
+                    f"seq={frame_marker['frame_seq']} "
+                    f"timestamp_ms={frame_marker['timestamp_ms_full']} "
+                    f"render_ms={frame_marker['render_ms']:.1f} "
+                    f"overlay_to_send_ms={delay_ms:.1f} "
+                    f"sender_pipeline_ms={sender_pipeline_ms} "
+                    f"sender_now_ms={sender_now_ms}",
+                    flush=True,
+                )
 
             if overlay_send_stats["count"] % metrics_interval_frames == 0:
                 average_ms = (

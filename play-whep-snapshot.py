@@ -49,10 +49,11 @@ def main():
             return 2
 
     src.set_property("whep-endpoint", whep_endpoint)
+    src.set_property("audio-caps", Gst.Caps.new_empty())
     src.set_property(
         "video-caps",
         Gst.Caps.from_string(
-            "application/x-rtp,media=video,encoding-name=H264,clock-rate=90000,payload=103"
+            "application/x-rtp,media=video,encoding-name=H264,clock-rate=90000,payload=103,packetization-mode=1,profile-level-id=42e01f,level-asymmetry-allowed=1"
         ),
     )
     sink.set_property("emit-signals", True)
@@ -79,19 +80,53 @@ def main():
         print("failed to link pngenc -> sink", file=sys.stderr)
         return 3
 
+    aux_pad_index = 0
+
     def on_pad_added(_src, pad):
+        nonlocal aux_pad_index
         caps = pad.get_current_caps() or pad.query_caps(None)
         structure = caps.get_structure(0) if caps and caps.get_size() > 0 else None
         media = structure.get_string("media") if structure else None
         encoding_name = structure.get_string("encoding-name") if structure else None
-        if media != "video" or encoding_name != "H264":
-            return
+        caps_text = caps.to_string() if caps is not None else "<none>"
+        print(
+            f"PAD_ADDED name={pad.get_name()} media={media} encoding={encoding_name} caps={caps_text}",
+            flush=True,
+        )
         sink_pad = depay.get_static_pad("sink")
-        if sink_pad.is_linked():
+        should_link_primary = (
+            not sink_pad.is_linked()
+            and (media == "video" or media is None)
+            and (encoding_name in (None, "H264"))
+        )
+        if should_link_primary:
+            result = pad.link(sink_pad)
+            if result != Gst.PadLinkReturn.OK:
+                print(f"failed to link src pad: {result}", file=sys.stderr)
+            else:
+                print("PRIMARY_PAD_LINK_RESULT=ok", flush=True)
             return
-        result = pad.link(sink_pad)
-        if result != Gst.PadLinkReturn.OK:
-            print(f"failed to link src pad: {result}", file=sys.stderr)
+
+        if media != "video" or encoding_name != "H264":
+            aux_pad_index += 1
+            queue = Gst.ElementFactory.make("queue", f"aux_queue_{aux_pad_index}")
+            fake = Gst.ElementFactory.make("fakesink", f"aux_sink_{aux_pad_index}")
+            if queue is None or fake is None:
+                print("failed to create aux sink chain", file=sys.stderr)
+                return
+            fake.set_property("sync", False)
+            pipeline.add(queue)
+            pipeline.add(fake)
+            queue.sync_state_with_parent()
+            fake.sync_state_with_parent()
+            if not queue.link(fake):
+                print("failed to link aux queue -> fakesink", file=sys.stderr)
+                return
+            aux_sink_pad = queue.get_static_pad("sink")
+            result = pad.link(aux_sink_pad)
+            print(f"AUX_PAD_LINK_RESULT={result.value_nick}", flush=True)
+            return
+        print("PRIMARY_PAD_ALREADY_LINKED", flush=True)
 
     src.connect("pad-added", on_pad_added)
 

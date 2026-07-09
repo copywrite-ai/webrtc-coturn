@@ -159,6 +159,7 @@
       <section class="panel" style="display:grid; gap:12px;">
         <div class="toolbar">
           <span class="badge">Direct WHEP</span>
+          <span class="badge" id="buildBadge">Build --</span>
           <h1>四路直连播放</h1>
         </div>
         <p class="subtle">只做四路 WHEP 直连，不走房间、不注入 TURN、不做 relay 预设。切换时会重新创建 WHEP 会话。</p>
@@ -194,7 +195,12 @@
           <div class="metrics">
             <span>ICE: <strong class="ice">idle</strong></span>
             <span>分辨率: <strong class="resolution">--</strong></span>
-            <span>延迟: <strong class="latency">--</strong></span>
+            <span>ORTM: <strong class="latency-ortm">--</strong></span>
+            <span>净ORTM: <strong class="latency-ortm-net">--</strong></span>
+            <span>Fallback: <strong class="latency-fallback">--</strong></span>
+            <span>前段: <strong class="latency-upstream">--</strong></span>
+            <span>净前段: <strong class="latency-upstream-net">--</strong></span>
+            <span>浏览器: <strong class="browser-cost">--</strong></span>
           </div>
         </div>
         <video autoplay playsinline controls muted></video>
@@ -202,23 +208,304 @@
     </template>
 
     <script>
+      const BUILD_VERSION = '2026-07-09-ortm-v0-player-10';
       const logEl = document.getElementById('log');
       const slotsEl = document.getElementById('slots');
       const template = document.getElementById('slotTemplate');
+      const buildBadgeEl = document.getElementById('buildBadge');
       const params = new URLSearchParams(location.search);
+      buildBadgeEl.textContent = `Build ${BUILD_VERSION}`;
+      const clientLogEndpoint = '/client-log';
+      const clientLogPeerId = globalThis.crypto?.randomUUID?.() || `quad-${Date.now()}`;
 
       const defaultUrls = [
-        params.get('whep1') || '',
+        params.get('whep1') || 'http://127.0.0.1:9001/fish_front/whep',
         params.get('whep2') || '',
         params.get('whep3') || '',
         params.get('whep4') || '',
       ];
+      const ORTM_CONFIG = {
+        x: 24,
+        y: 24,
+        cell: 12,
+        padding: 12,
+        gridSize: 32,
+        finderSize: 4,
+        timingIndex: 4,
+        scales: [1.0, 0.95, 1.05, 0.9, 1.1],
+        offsets: [0, -4, 4],
+      };
+      const ORTM_PAYLOAD_BITS = 4 + 16 + 32 + 16;
+      const ORTM_MAX_REASONABLE_LATENCY_MS = 5000;
+      const ORTM_DECODE_INTERVAL_MS = 500;
+      const ORTM_DECODE_MODE = 'rvfc';
 
       function log(message) {
         const line = `${new Date().toISOString()} ${message}`;
         logEl.textContent += `${line}\n`;
         logEl.scrollTop = logEl.scrollHeight;
         console.log(line);
+      }
+
+      function queueClientLog(entry) {
+        const payload = JSON.stringify({
+          peerId: clientLogPeerId,
+          page: location.href,
+          ...entry,
+        });
+        fetch(clientLogEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {});
+      }
+
+      function crc16CcittFalse(bytes) {
+        let crc = 0xffff;
+        for (const byte of bytes) {
+          crc ^= byte << 8;
+          for (let index = 0; index < 8; index += 1) {
+            if (crc & 0x8000) {
+              crc = ((crc << 1) ^ 0x1021) & 0xffff;
+            } else {
+              crc = (crc << 1) & 0xffff;
+            }
+          }
+        }
+        return crc;
+      }
+
+      function ortmInFinder(row, col) {
+        const { finderSize, gridSize } = ORTM_CONFIG;
+        return (
+          (row < finderSize && col < finderSize) ||
+          (row < finderSize && col >= gridSize - finderSize) ||
+          (row >= gridSize - finderSize && col < finderSize) ||
+          (row >= gridSize - finderSize && col >= gridSize - finderSize)
+        );
+      }
+
+      function ortmIsReservedCell(row, col) {
+        return ortmInFinder(row, col) || row === ORTM_CONFIG.timingIndex || col === ORTM_CONFIG.timingIndex;
+      }
+
+      function ortmExpectedFinderBit(localRow, localCol) {
+        return localRow === 0 || localRow === ORTM_CONFIG.finderSize - 1 || localCol === 0 || localCol === ORTM_CONFIG.finderSize - 1 ? 1 : 0;
+      }
+
+      function ortmBitsToNumber(bits, offset, width) {
+        let value = 0;
+        for (let index = 0; index < width; index += 1) {
+          value = (value << 1) | bits[offset + index];
+        }
+        return value >>> 0;
+      }
+
+      function buildOrtmCandidates() {
+        const candidates = [];
+        for (const scale of ORTM_CONFIG.scales) {
+          for (const dx of ORTM_CONFIG.offsets) {
+            for (const dy of ORTM_CONFIG.offsets) {
+              const cell = ORTM_CONFIG.cell * scale;
+              const padding = ORTM_CONFIG.padding * scale;
+              const markerSize = ORTM_CONFIG.gridSize * cell;
+              candidates.push({
+                scale,
+                dx,
+                dy,
+                x: ORTM_CONFIG.x + dx,
+                y: ORTM_CONFIG.y + dy,
+                cell,
+                padding,
+                markerSize,
+                boxSize: markerSize + padding * 2,
+              });
+            }
+          }
+        }
+        return candidates;
+      }
+
+      const ORTM_CANDIDATES = buildOrtmCandidates();
+
+      function ortmSampleCellLuma(imageData, frameWidth, frameHeight, candidate, row, col) {
+        const positions = [0.2, 0.5, 0.8];
+        const originX = candidate.x + candidate.padding + col * candidate.cell;
+        const originY = candidate.y + candidate.padding + row * candidate.cell;
+        let total = 0;
+        let count = 0;
+        for (const px of positions) {
+          for (const py of positions) {
+            const x = Math.round(originX + candidate.cell * px);
+            const y = Math.round(originY + candidate.cell * py);
+            if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) {
+              continue;
+            }
+            const offset = (y * frameWidth + x) * 4;
+            const r = imageData.data[offset];
+            const g = imageData.data[offset + 1];
+            const b = imageData.data[offset + 2];
+            total += 0.299 * r + 0.587 * g + 0.114 * b;
+            count += 1;
+          }
+        }
+        return count ? total / count : NaN;
+      }
+
+      function decodeOrtmFromImageData(imageData, frameWidth, frameHeight, nowMs) {
+        let bestFailure = null;
+
+        for (const candidate of ORTM_CANDIDATES) {
+          if (
+            candidate.x < 0 ||
+            candidate.y < 0 ||
+            candidate.x + candidate.boxSize > frameWidth ||
+            candidate.y + candidate.boxSize > frameHeight
+          ) {
+            continue;
+          }
+
+          const lumaGrid = Array.from({ length: ORTM_CONFIG.gridSize }, () => new Array(ORTM_CONFIG.gridSize).fill(255));
+          let minLuma = Infinity;
+          let maxLuma = -Infinity;
+          let invalid = false;
+
+          for (let row = 0; row < ORTM_CONFIG.gridSize && !invalid; row += 1) {
+            for (let col = 0; col < ORTM_CONFIG.gridSize; col += 1) {
+              const luma = ortmSampleCellLuma(imageData, frameWidth, frameHeight, candidate, row, col);
+              if (!Number.isFinite(luma)) {
+                invalid = true;
+                break;
+              }
+              lumaGrid[row][col] = luma;
+              minLuma = Math.min(minLuma, luma);
+              maxLuma = Math.max(maxLuma, luma);
+            }
+          }
+
+          if (invalid) {
+            continue;
+          }
+
+          const threshold = (minLuma + maxLuma) / 2;
+          const contrast = maxLuma - minLuma;
+          const bitGrid = lumaGrid.map((row) => row.map((luma) => (luma < threshold ? 1 : 0)));
+          let finderErrors = 0;
+          let timingErrors = 0;
+
+          for (let row = 0; row < ORTM_CONFIG.gridSize; row += 1) {
+            for (let col = 0; col < ORTM_CONFIG.gridSize; col += 1) {
+              if (ortmInFinder(row, col)) {
+                const localRow = row < ORTM_CONFIG.finderSize ? row : row - (ORTM_CONFIG.gridSize - ORTM_CONFIG.finderSize);
+                const localCol = col < ORTM_CONFIG.finderSize ? col : col - (ORTM_CONFIG.gridSize - ORTM_CONFIG.finderSize);
+                if (bitGrid[row][col] !== ortmExpectedFinderBit(localRow, localCol)) {
+                  finderErrors += 1;
+                }
+              } else if (row === ORTM_CONFIG.timingIndex) {
+                if (bitGrid[row][col] !== (col % 2)) {
+                  timingErrors += 1;
+                }
+              } else if (col === ORTM_CONFIG.timingIndex) {
+                if (bitGrid[row][col] !== (row % 2)) {
+                  timingErrors += 1;
+                }
+              }
+            }
+          }
+
+          const score = finderErrors * 4 + timingErrors * 2 - contrast / 32;
+          const failureBase = {
+            ok: false,
+            score,
+            finder_errors: finderErrors,
+            timing_errors: timingErrors,
+            threshold,
+            contrast,
+            candidate,
+          };
+
+          if (finderErrors > 8 || timingErrors > 10 || contrast < 32) {
+            const failure = {
+              ...failureBase,
+              reason: finderErrors > 8 || timingErrors > 10 ? 'structure-mismatch' : 'low-contrast',
+            };
+            if (!bestFailure || failure.score < bestFailure.score) {
+              bestFailure = failure;
+            }
+            continue;
+          }
+
+          const payloadBits = [];
+          for (let row = 0; row < ORTM_CONFIG.gridSize; row += 1) {
+            for (let col = 0; col < ORTM_CONFIG.gridSize; col += 1) {
+              if (ortmIsReservedCell(row, col)) continue;
+              payloadBits.push(bitGrid[row][col]);
+            }
+          }
+
+          if (payloadBits.length < ORTM_PAYLOAD_BITS) {
+            const failure = { ...failureBase, reason: 'payload-short' };
+            if (!bestFailure || failure.score < bestFailure.score) {
+              bestFailure = failure;
+            }
+            continue;
+          }
+
+          const version = ortmBitsToNumber(payloadBits, 0, 4);
+          const frameSeq = ortmBitsToNumber(payloadBits, 4, 16);
+          const timestampMs = ortmBitsToNumber(payloadBits, 20, 32);
+          const crc16 = ortmBitsToNumber(payloadBits, 52, 16);
+          const expectedCrc16 = crc16CcittFalse(new Uint8Array([
+            version & 0x0f,
+            (frameSeq >>> 8) & 0xff,
+            frameSeq & 0xff,
+            (timestampMs >>> 24) & 0xff,
+            (timestampMs >>> 16) & 0xff,
+            (timestampMs >>> 8) & 0xff,
+            timestampMs & 0xff,
+          ]));
+
+          if (crc16 !== expectedCrc16) {
+            const failure = { ...failureBase, reason: 'crc-mismatch' };
+            if (!bestFailure || failure.score < bestFailure.score) {
+              bestFailure = failure;
+            }
+            continue;
+          }
+
+          const latencyMs = ((nowMs >>> 0) - timestampMs) >>> 0;
+          if (latencyMs < 0 || latencyMs >= ORTM_MAX_REASONABLE_LATENCY_MS) {
+            const failure = { ...failureBase, reason: 'latency-out-of-range' };
+            if (!bestFailure || failure.score < bestFailure.score) {
+              bestFailure = failure;
+            }
+            continue;
+          }
+
+          return {
+            ok: true,
+            version,
+            frame_seq: frameSeq,
+            timestamp_ms: timestampMs,
+            latency_ms: latencyMs,
+            finder_errors: finderErrors,
+            timing_errors: timingErrors,
+            threshold,
+            contrast,
+            candidate,
+          };
+        }
+
+        return bestFailure || {
+          ok: false,
+          reason: 'no-candidate',
+          score: Infinity,
+          finder_errors: null,
+          timing_errors: null,
+          threshold: null,
+          contrast: null,
+        };
       }
 
       function absoluteUrl(value) {
@@ -251,7 +538,12 @@
         const stopBtn = node.querySelector('.stop');
         const iceEl = node.querySelector('.ice');
         const resolutionEl = node.querySelector('.resolution');
-        const latencyEl = node.querySelector('.latency');
+        const ortmLatencyEl = node.querySelector('.latency-ortm');
+        const ortmNetLatencyEl = node.querySelector('.latency-ortm-net');
+        const fallbackLatencyEl = node.querySelector('.latency-fallback');
+        const upstreamLatencyEl = node.querySelector('.latency-upstream');
+        const upstreamNetLatencyEl = node.querySelector('.latency-upstream-net');
+        const browserCostEl = node.querySelector('.browser-cost');
         const videoEl = node.querySelector('video');
 
         nameEl.textContent = name;
@@ -263,10 +555,207 @@
           pc: null,
           sessionUrl: null,
           statsTimer: null,
+          decodeTimer: null,
+          decodeFrameCallbackId: null,
+          decodeCanvas: document.createElement('canvas'),
+          decodeCtx: null,
+          ortmLastSuccessAt: 0,
+          ortmLastResult: null,
+          ortmLastFailureReason: null,
+          ortmLastLoggedFrameSeq: null,
+          lastMetricLogLine: null,
+          browserPerf: {
+            count: 0,
+            drawMsTotal: 0,
+            readbackMsTotal: 0,
+            decodeMsTotal: 0,
+          },
         };
+        state.decodeCtx = state.decodeCanvas.getContext('2d', { willReadFrequently: true });
 
         function setStatus(text) {
           statusEl.textContent = text;
+        }
+
+        function parseMetricMs(text) {
+          const match = String(text || '').match(/(\d+(?:\.\d+)?)/);
+          return match ? Number(match[1]) : NaN;
+        }
+
+        function updateDerivedLatency() {
+          const ortmMs = state.ortmLastResult?.latency_ms;
+          const fallbackMs = parseMetricMs(fallbackLatencyEl.textContent);
+          const browserMs = state.browserPerf.count
+            ? (state.browserPerf.drawMsTotal + state.browserPerf.readbackMsTotal + state.browserPerf.decodeMsTotal) / state.browserPerf.count
+            : NaN;
+          if (Number.isFinite(ortmMs) && Number.isFinite(fallbackMs) && ortmMs >= fallbackMs) {
+            upstreamLatencyEl.textContent = `${Math.round(ortmMs - fallbackMs)} ms`;
+          } else {
+            upstreamLatencyEl.textContent = '--';
+          }
+          if (Number.isFinite(ortmMs) && Number.isFinite(browserMs) && ortmMs >= browserMs) {
+            ortmNetLatencyEl.textContent = `${Math.round(ortmMs - browserMs)} ms`;
+          } else {
+            ortmNetLatencyEl.textContent = '--';
+          }
+          const upstreamMs = parseMetricMs(upstreamLatencyEl.textContent);
+          if (Number.isFinite(upstreamMs) && Number.isFinite(browserMs) && upstreamMs >= browserMs) {
+            upstreamNetLatencyEl.textContent = `${Math.round(upstreamMs - browserMs)} ms`;
+          } else {
+            upstreamNetLatencyEl.textContent = '--';
+          }
+        }
+
+        function emitMetricLog() {
+          const browserPerf = state.browserPerf.count
+            ? `browser=${browserCostEl.textContent || '--'} draw=${(state.browserPerf.drawMsTotal / state.browserPerf.count).toFixed(1)}ms read=${(state.browserPerf.readbackMsTotal / state.browserPerf.count).toFixed(1)}ms decode=${(state.browserPerf.decodeMsTotal / state.browserPerf.count).toFixed(1)}ms`
+            : 'browser=-- draw=-- read=-- decode=--';
+          const line = [
+            `slot=${name}`,
+            `ice=${iceEl.textContent || 'idle'}`,
+            `resolution=${resolutionEl.textContent || '--'}`,
+            `ortm=${ortmLatencyEl.textContent || '--'}`,
+            `ortmNet=${ortmNetLatencyEl.textContent || '--'}`,
+            `fallback=${fallbackLatencyEl.textContent || '--'}`,
+            `upstream=${upstreamLatencyEl.textContent || '--'}`,
+            `upstreamNet=${upstreamNetLatencyEl.textContent || '--'}`,
+            `decodeMode=${state.decodeMode || ORTM_DECODE_MODE}`,
+            browserPerf,
+            `status=${statusEl.textContent || '--'}`,
+          ].join(' ');
+          if (line === state.lastMetricLogLine) {
+            return;
+          }
+          state.lastMetricLogLine = line;
+          queueClientLog({
+            group: 'metrics',
+            level: 'info',
+            message: line,
+          });
+        }
+
+        function stopDecoder() {
+          if (state.decodeTimer) {
+            clearInterval(state.decodeTimer);
+            state.decodeTimer = null;
+          }
+          if (
+            state.decodeFrameCallbackId != null &&
+            typeof videoEl.cancelVideoFrameCallback === 'function'
+          ) {
+            videoEl.cancelVideoFrameCallback(state.decodeFrameCallbackId);
+          }
+          state.decodeFrameCallbackId = null;
+          state.ortmLastSuccessAt = 0;
+          state.ortmLastResult = null;
+          state.ortmLastFailureReason = null;
+          state.ortmLastLoggedFrameSeq = null;
+          state.lastMetricLogLine = null;
+          state.decodeMode = ORTM_DECODE_MODE;
+          state.browserPerf = {
+            count: 0,
+            drawMsTotal: 0,
+            readbackMsTotal: 0,
+            decodeMsTotal: 0,
+          };
+          ortmLatencyEl.textContent = '--';
+          ortmNetLatencyEl.textContent = '--';
+          upstreamLatencyEl.textContent = '--';
+          upstreamNetLatencyEl.textContent = '--';
+          browserCostEl.textContent = '--';
+        }
+
+        function updateLatencyFromOrtm() {
+          if (
+            !state.decodeCtx ||
+            !videoEl.videoWidth ||
+            !videoEl.videoHeight ||
+            videoEl.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+          ) {
+            return;
+          }
+          const width = videoEl.videoWidth;
+          const height = videoEl.videoHeight;
+          if (state.decodeCanvas.width !== width) state.decodeCanvas.width = width;
+          if (state.decodeCanvas.height !== height) state.decodeCanvas.height = height;
+          const drawStartedAt = performance.now();
+          state.decodeCtx.drawImage(videoEl, 0, 0, width, height);
+          const drawFinishedAt = performance.now();
+          const imageData = state.decodeCtx.getImageData(0, 0, width, height);
+          const readbackFinishedAt = performance.now();
+          const result = decodeOrtmFromImageData(imageData, width, height, Date.now());
+          const decodeFinishedAt = performance.now();
+          const drawMs = drawFinishedAt - drawStartedAt;
+          const readbackMs = readbackFinishedAt - drawFinishedAt;
+          const decodeMs = decodeFinishedAt - readbackFinishedAt;
+          state.browserPerf.count += 1;
+          state.browserPerf.drawMsTotal += drawMs;
+          state.browserPerf.readbackMsTotal += readbackMs;
+          state.browserPerf.decodeMsTotal += decodeMs;
+          const avgDrawMs = state.browserPerf.drawMsTotal / state.browserPerf.count;
+          const avgReadbackMs = state.browserPerf.readbackMsTotal / state.browserPerf.count;
+          const avgDecodeMs = state.browserPerf.decodeMsTotal / state.browserPerf.count;
+          browserCostEl.textContent = `${(avgDrawMs + avgReadbackMs + avgDecodeMs).toFixed(1)} ms`;
+
+          if (result.ok) {
+            state.ortmLastSuccessAt = performance.now();
+            state.ortmLastResult = result;
+            ortmLatencyEl.textContent = `${Math.round(result.latency_ms)} ms`;
+            updateDerivedLatency();
+            const shouldLogSuccess =
+              state.ortmLastLoggedFrameSeq == null ||
+              (((result.frame_seq - state.ortmLastLoggedFrameSeq) + 65536) % 65536) >= 30;
+            if (shouldLogSuccess) {
+              log(
+                `${name} ORTM ok seq=${result.frame_seq} latency=${Math.round(result.latency_ms)}ms finder=${result.finder_errors} timing=${result.timing_errors} contrast=${result.contrast.toFixed(1)}`
+              );
+              state.ortmLastLoggedFrameSeq = result.frame_seq;
+            }
+            state.ortmLastFailureReason = null;
+          } else if (state.ortmLastFailureReason !== result.reason && performance.now() - state.ortmLastSuccessAt > 1500) {
+            log(
+              `${name} ORTM fail reason=${result.reason} score=${Number.isFinite(result.score) ? result.score.toFixed(1) : 'inf'} finder=${result.finder_errors ?? '--'} timing=${result.timing_errors ?? '--'} contrast=${result.contrast == null ? '--' : result.contrast.toFixed(1)}`
+            );
+            state.ortmLastFailureReason = result.reason;
+          }
+        }
+
+        function startDecoder() {
+          stopDecoder();
+          state.decodeMode = (
+            ORTM_DECODE_MODE === 'rvfc' &&
+            typeof videoEl.requestVideoFrameCallback === 'function'
+          ) ? 'rvfc' : 'interval';
+          if (state.decodeMode === 'rvfc') {
+            const onVideoFrame = () => {
+              state.decodeFrameCallbackId = null;
+              try {
+                updateLatencyFromOrtm();
+              } catch (error) {
+                const reason = `decode-error:${error.message}`;
+                if (state.ortmLastFailureReason !== reason) {
+                  state.ortmLastFailureReason = reason;
+                  log(`${name} ORTM decode error: ${error.message}`);
+                }
+              }
+              if (state.pc && videoEl.srcObject) {
+                state.decodeFrameCallbackId = videoEl.requestVideoFrameCallback(onVideoFrame);
+              }
+            };
+            state.decodeFrameCallbackId = videoEl.requestVideoFrameCallback(onVideoFrame);
+            return;
+          }
+          state.decodeTimer = setInterval(() => {
+            try {
+              updateLatencyFromOrtm();
+            } catch (error) {
+              const reason = `decode-error:${error.message}`;
+              if (state.ortmLastFailureReason !== reason) {
+                state.ortmLastFailureReason = reason;
+                log(`${name} ORTM decode error: ${error.message}`);
+              }
+            }
+          }, ORTM_DECODE_INTERVAL_MS);
         }
 
         async function stop() {
@@ -274,6 +763,7 @@
             clearInterval(state.statsTimer);
             state.statsTimer = null;
           }
+          stopDecoder();
           if (state.sessionUrl) {
             try {
               await fetch(state.sessionUrl, { method: 'DELETE' });
@@ -290,8 +780,15 @@
           videoEl.srcObject = null;
           iceEl.textContent = 'idle';
           resolutionEl.textContent = '--';
-          latencyEl.textContent = '--';
+          ortmLatencyEl.textContent = '--';
+          ortmNetLatencyEl.textContent = '--';
+          fallbackLatencyEl.textContent = '--';
+          upstreamLatencyEl.textContent = '--';
+          upstreamNetLatencyEl.textContent = '--';
+          browserCostEl.textContent = '--';
+          state.lastMetricLogLine = null;
           setStatus('stopped');
+          emitMetricLog();
         }
 
         async function start() {
@@ -320,6 +817,7 @@
             } catch (error) {
               log(`${name} playoutDelayHint failed: ${error.message}`);
             }
+            startDecoder();
             setStatus('playing');
             log(`${name} remote track received`);
           };
@@ -403,24 +901,38 @@
                 }
               });
               if (
+                state.ortmLastResult &&
+                performance.now() - state.ortmLastSuccessAt < 1500 &&
+                typeof state.ortmLastResult.latency_ms === 'number'
+              ) {
+                ortmLatencyEl.textContent = `${Math.round(state.ortmLastResult.latency_ms)} ms`;
+              } else {
+                ortmLatencyEl.textContent = '--';
+              }
+              if (
                 inbound &&
                 typeof inbound.estimatedPlayoutTimestamp === 'number' &&
                 typeof inbound.lastPacketReceivedTimestamp === 'number'
               ) {
                 const directMs = inbound.estimatedPlayoutTimestamp - inbound.lastPacketReceivedTimestamp;
                 if (Number.isFinite(directMs) && directMs >= 0 && directMs < 60000) {
-                  latencyEl.textContent = `${directMs.toFixed(0)} ms`;
+                  fallbackLatencyEl.textContent = `${directMs.toFixed(0)} ms`;
+                  updateDerivedLatency();
                   return;
                 }
               }
               if (inbound && typeof inbound.jitterBufferDelay === 'number' && typeof inbound.jitterBufferEmittedCount === 'number' && inbound.jitterBufferEmittedCount > 0) {
                 const avgMs = inbound.jitterBufferDelay / inbound.jitterBufferEmittedCount * 1000;
-                latencyEl.textContent = `${avgMs.toFixed(0)} ms`;
+                fallbackLatencyEl.textContent = `${avgMs.toFixed(0)} ms`;
               } else {
-                latencyEl.textContent = '--';
+                fallbackLatencyEl.textContent = '--';
               }
+              updateDerivedLatency();
+              emitMetricLog();
             } catch (error) {
-              latencyEl.textContent = 'err';
+              fallbackLatencyEl.textContent = 'err';
+              updateDerivedLatency();
+              emitMetricLog();
             }
           }, 1000);
         }
