@@ -1,8 +1,34 @@
 logLevel: info
 logDestinations: [stdout]
 
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+        path:
+      - action: read
+        path:
+      - action: playback
+        path:
+  - user: metrics
+    pass: metrics123
+    ips: []
+    permissions:
+      - action: api
+      - action: metrics
+      - action: pprof
+
 api: true
 apiAddress: :9997
+
+metrics: true
+metricsAddress: :9998
+
+pprof: true
+pprofAddress: :9999
 
 hls: false
 rtsp: true
