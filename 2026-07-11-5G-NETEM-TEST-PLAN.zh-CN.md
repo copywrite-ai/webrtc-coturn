@@ -2,6 +2,11 @@
 
 日期：2026-07-11
 
+补充背景：
+
+- 2026-07-09 已完成 direct / relay / ORTM 基础能力验证，见 [2026-07-09-WHEP-ORTM-SUMMARY.zh-CN.md](/Users/peng/Documents/tunnel/2026-07-09-WHEP-ORTM-SUMMARY.zh-CN.md)
+- 本文档在原测试计划基础上，补充 2026-07-11 当天的实际弱网实验结果
+
 ## 目标
 
 验证主产品推荐链路在不同网络条件下的低延迟表现：
@@ -237,3 +242,120 @@ MediaMTX 或 TURN 指标出现明显异常
 - 是否强制 TURN relay。
 - 控制指令 RTT。
 - 设备执行反馈延迟。
+
+## 实际结果
+
+### 本轮环境
+
+固定条件：
+
+```text
+stream: fish_front
+page:   http://127.0.0.1:9001/whep-quad-direct.html
+path:   Browser -> WHEP direct
+profile: 5g-mid
+netem: delay 40ms +/- 15ms, loss 0.5%, rate 8mbit
+采样方式: 通过 tunnel-monitor 容器内 /api/snapshot 抓取稳定窗口快照
+```
+
+本轮中间做过两项工程修正：
+
+1. `scripts/netem-fish-front.sh` 增加 guard 机制  
+   解决 `fish_front` 容器重建后 `tc qdisc` 丢失，导致实验实际上退回无劣化的问题。
+2. `docker/whip-publisher/Dockerfile.base` 补入 `gst-plugin-rtp` / `rtpgccbwe`  
+   使发送端具备更完整的 WebRTC 拥塞控制基础。
+
+### 有效样本
+
+| 场景 | ORTM | 净ORTM | Upstream | 净Upstream | Browser | Jitter | rtcFps | rtcBitrate | MediaMTX rtpPacketsLost | 结论 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `960x540 / 30fps / 2.5Mbps` | `146 ms` | `141 ms` | `134 ms` | `129 ms` | `4.6 ms` | `15.7 ms` | `30` | `2.34 Mbps` | `225` | 可用基线 |
+| `960x540 / 30fps / 3.0Mbps` | `278 ms` | `273 ms` | `264 ms` | `259 ms` | `4.6 ms` | `82.0 ms` | `30` | `2.99 Mbps` | `127` | 明显变差 |
+| `960x540 / 60fps / 3.0Mbps` | `137 ms` | `132 ms` | `121 ms` | `116 ms` | `4.6 ms` | `20.0 ms` | `55` | `2.71 Mbps` | `88` | 好于 30/2.5 |
+| `960x540 / 60fps / 2.5Mbps` | `133 ms` | `128 ms` | `117 ms` | `112 ms` | `4.5 ms` | `7.5 ms` | `59` | `2.35 Mbps` | `78` | 本轮最优 |
+
+### 本轮直接结论
+
+1. 当前 `5g-mid` 条件下，最优点是：
+
+```text
+960x540 / 60fps / 2.5Mbps / key-int=120
+```
+
+2. `30fps / 3.0Mbps` 是明确坏点：
+
+- ORTM 从 `146 ms` 上升到 `278 ms`
+- upstream 从 `134 ms` 上升到 `264 ms`
+- jitter 上升到 `82 ms`
+
+这说明在当前 8mbit / 0.5% loss / 40ms+/-15ms 的上行模拟里，单纯提高码率会放大队列和抖动，不会自然降低端到端时延。
+
+3. 在同样 `60fps` 下：
+
+- `2.5Mbps` 比 `3.0Mbps` 更稳
+- `rtcFps` 更接近目标值
+- `jitter` 更低
+- ORTM / upstream 都更好
+
+这说明这里的关键不是“码率越高越低延迟”，而是编码输出、网络整形和浏览器接收侧缓冲之间存在一个平衡点。
+
+4. 浏览器仍不是主瓶颈：
+
+- Browser cost 始终约 `4.5 ~ 4.6 ms`
+- 大头仍然在 upstream
+- 发送端内部 `overlay_to_send` 约 `1.6 ~ 1.9 ms`
+
+因此本轮的主要优化方向仍然应放在：
+
+- publisher 输出节奏
+- WebRTC sender pacing / congestion behavior
+- 弱网下队列堆积与恢复
+
+### 与 2026-07-09 结论的关系
+
+2026-07-09 的 direct 本地优选点是：
+
+```text
+60fps / 5Mbps
+```
+
+它是在近乎本地健康链路下，把延迟压到最低的更激进档位。
+
+而 2026-07-11 这轮 `5g-mid` 实测得到的推荐点变成：
+
+```text
+960x540 / 60fps / 2.5Mbps
+```
+
+这两者并不矛盾，说明已经出现了明确的双档位分化：
+
+- 健康局域网 / 近端链路：可以推更高码率
+- 弱网上行 / 5G 模拟：应优先保证高 fps，同时把总码率控制在较保守区间
+
+### 当前建议默认档
+
+如果接下来继续在 `5g-mid` 条件下做单路远程观看实验，建议默认使用：
+
+```text
+WIDTH=960
+HEIGHT=540
+FPS=60
+BITRATE_KBPS=2500
+KEY_INT_MAX=120
+```
+
+### 下一轮建议
+
+下一轮最值得继续做的是围绕 `60fps` 做窄范围二分，而不是回到 `30fps`：
+
+```text
+960x540 / 60fps / 2.2Mbps
+960x540 / 60fps / 2.5Mbps
+960x540 / 60fps / 2.8Mbps
+```
+
+目标是确认：
+
+- `2.5Mbps` 是否就是当前最优平衡点
+- 是否存在更低码率但相同时延的点
+- 弱网下 ORTM / upstream / jitter 的稳定性边界
