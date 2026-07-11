@@ -499,6 +499,12 @@ function prometheusSnapshot() {
     if (isMetricNumber(viewer.decode)) {
       lines.push(`tunnel_viewer_slot_decode_cost_ms{${label}} ${Number(viewer.decode)}`);
     }
+    if (isMetricNumber(viewer.displayTap)) {
+      lines.push(`tunnel_viewer_slot_display_tap_ms{${label}} ${Number(viewer.displayTap)}`);
+    }
+    if (isMetricNumber(viewer.displaySubmit)) {
+      lines.push(`tunnel_viewer_slot_display_submit_ms{${label}} ${Number(viewer.displaySubmit)}`);
+    }
     if (isMetricNumber(viewer.rtcJitter)) {
       lines.push(`tunnel_viewer_slot_rtc_jitter_buffer_ms{${label}} ${Number(viewer.rtcJitter)}`);
     }

@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 import argparse
+import ctypes
+import ctypes.util
 import json
 import os
 import signal
 import sys
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -262,13 +265,27 @@ def make_pipeline(args):
         else:
             raise RuntimeError("no H264 decoder found; expected vtdec, avdec_h264, or openh264dec")
 
+    if args.display:
+        raw_tail = (
+            "tee name=t "
+            "t. ! queue leaky=downstream max-size-buffers=1 max-size-bytes=0 max-size-time=0 "
+            "! videoconvert ! video/x-raw,format=RGBA "
+            "! appsink name=ortm_sink emit-signals=true sync=false max-buffers=1 drop=true "
+            "t. ! queue leaky=downstream max-size-buffers=1 max-size-bytes=0 max-size-time=0 "
+            "! videoconvert "
+            "! identity name=display_tap signal-handoffs=true "
+            f"! {args.video_sink} sync=false async=false"
+        )
+    else:
+        raw_tail = "videoconvert ! video/x-raw,format=RGBA ! appsink name=ortm_sink emit-signals=true sync=false max-buffers=1 drop=true"
+
     if source == "whepclientsrc":
         pipeline_text = (
             f"whepclientsrc signaller::whep-endpoint={args.whep_url} "
             f"stun-server= video-codecs=H264 name=src "
             "src.req_video_0 ! application/x-rtp,media=video,encoding-name=H264,clock-rate=90000 "
-            f"! rtph264depay ! h264parse ! {decoder} ! videoconvert "
-            "! video/x-raw,format=RGBA ! appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true"
+            f"! rtph264depay ! h264parse ! {decoder} "
+            f"! {raw_tail}"
         )
     elif source == "whepsrc":
         caps = (
@@ -279,8 +296,8 @@ def make_pipeline(args):
             f"whepsrc whep-endpoint={args.whep_url} use-link-headers=false "
             f"audio-caps=EMPTY video-caps='{caps}' name=src "
             "src. ! application/x-rtp,media=video,encoding-name=H264,clock-rate=90000 "
-            f"! rtph264depay ! h264parse ! {decoder} ! videoconvert "
-            "! video/x-raw,format=RGBA ! appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true"
+            f"! rtph264depay ! h264parse ! {decoder} "
+            f"! {raw_tail}"
         )
     else:
         raise RuntimeError(f"unsupported source: {source}")
@@ -316,24 +333,31 @@ def parse_args():
     parser.add_argument("--decode-interval-ms", type=int, default=200)
     parser.add_argument("--log-file", default="logs/client-events.log")
     parser.add_argument("--no-log-file", action="store_true")
+    parser.add_argument("--display", action="store_true", help="also show video and measure handoff into the video sink")
+    parser.add_argument("--video-sink", default="osxvideosink", help="video sink to use with --display")
     parser.add_argument("--print-pipeline", action="store_true")
     return parser.parse_args()
 
 
-def main():
-    args = parse_args()
+def run_player(args):
     Gst.init(None)
     pipeline, source, decoder, pipeline_text = make_pipeline(args)
     if args.print_pipeline:
         print(pipeline_text, flush=True)
 
-    sink = pipeline.get_by_name("sink")
+    sink = pipeline.get_by_name("ortm_sink")
     if sink is None:
         raise RuntimeError("appsink not found")
+    display_tap = pipeline.get_by_name("display_tap")
 
     peer_id = f"gst-{uuid.uuid4()}"
     loop = GLib.MainLoop()
     last_decode_at = 0.0
+    frame_times = {}
+    latest_display_submit_ms = None
+    latest_display_tap_latency_ms = None
+    latest_display_tap_perf_ms = None
+    latest_display_tap_wall_ms = None
     stats = {
         "frames": 0,
         "decoded": 0,
@@ -341,10 +365,64 @@ def main():
         "last_seq": None,
     }
 
+    def frame_key(buffer):
+        pts = int(buffer.pts)
+        if pts >= 0 and pts != Gst.CLOCK_TIME_NONE:
+            return pts
+        dts = int(buffer.dts)
+        if dts >= 0 and dts != Gst.CLOCK_TIME_NONE:
+            return dts
+        return None
+
+    def update_display_tap_latency(item):
+        nonlocal latest_display_tap_latency_ms
+        if "display_tap_wall_ms" not in item or "timestamp_ms" not in item:
+            return
+        latency_ms = ((int(item["display_tap_wall_ms"]) & 0xFFFFFFFF) - int(item["timestamp_ms"])) & 0xFFFFFFFF
+        if latency_ms < ORTM_MAX_REASONABLE_LATENCY_MS:
+            latest_display_tap_latency_ms = latency_ms
+
+    def record_frame_time(key, field, value_ms, wall_ms=None):
+        nonlocal latest_display_submit_ms
+        if key is None:
+            return
+        item = frame_times.setdefault(key, {})
+        item[field] = value_ms
+        if wall_ms is not None:
+            item[f"{field}_wall_ms"] = wall_ms
+        if "appsink_ms" in item and "display_tap_ms" in item:
+            latest_display_submit_ms = item["display_tap_ms"] - item["appsink_ms"]
+            if args.display:
+                print(f"DISPLAY submit_ms={latest_display_submit_ms:.2f} pts={key}", flush=True)
+        update_display_tap_latency(item)
+        if len(frame_times) > 240:
+            for old_key in sorted(frame_times)[:120]:
+                frame_times.pop(old_key, None)
+
+    def record_ortm_timestamp(key, timestamp_ms, appsink_perf_ms=None):
+        nonlocal latest_display_tap_latency_ms
+        if key is None:
+            item = {}
+        else:
+            item = frame_times.setdefault(key, {})
+            item["timestamp_ms"] = timestamp_ms
+            update_display_tap_latency(item)
+        if (
+            latest_display_tap_perf_ms is not None
+            and latest_display_tap_wall_ms is not None
+            and appsink_perf_ms is not None
+            and abs(latest_display_tap_perf_ms - appsink_perf_ms) <= 50
+        ):
+            latency_ms = ((int(latest_display_tap_wall_ms) & 0xFFFFFFFF) - int(timestamp_ms)) & 0xFFFFFFFF
+            if latency_ms < ORTM_MAX_REASONABLE_LATENCY_MS:
+                latest_display_tap_latency_ms = latency_ms
+
     def emit_metric(result, width, height, cost_ms):
         status = "playing" if result["ok"] else f"decode-{result.get('reason', 'failed')}"
         ortm = f"{int(round(result['latency_ms']))}ms" if result["ok"] else "--"
         ortm_net = ortm
+        display_submit = "--" if latest_display_submit_ms is None else f"{latest_display_submit_ms:.1f}ms"
+        display_tap = "--" if latest_display_tap_latency_ms is None else f"{latest_display_tap_latency_ms:.0f}ms"
         message = " ".join(
             [
                 f"slot={args.slot}",
@@ -360,6 +438,8 @@ def main():
                 "draw=0.0ms",
                 "read=0.0ms",
                 f"decode={cost_ms:.1f}ms",
+                f"displayTap={display_tap}",
+                f"displaySubmit={display_submit}",
                 "rtcJitter=--",
                 "rtcDecode=--",
                 "rtcFps=--",
@@ -390,6 +470,9 @@ def main():
         width = structure.get_value("width")
         height = structure.get_value("height")
         buffer = sample.get_buffer()
+        key = frame_key(buffer)
+        appsink_perf_ms = time.perf_counter() * 1000
+        record_frame_time(key, "appsink_ms", appsink_perf_ms)
         ok, map_info = buffer.map(Gst.MapFlags.READ)
         if not ok:
             return Gst.FlowReturn.ERROR
@@ -402,6 +485,7 @@ def main():
         cost_ms = (time.perf_counter() - start) * 1000
 
         if result["ok"]:
+            record_ortm_timestamp(key, result["timestamp_ms"], appsink_perf_ms)
             stats["decoded"] += 1
             stats["last_seq"] = result["frame_seq"]
             print(
@@ -424,6 +508,20 @@ def main():
 
     sink.connect("new-sample", on_new_sample)
 
+    def on_display_handoff(_identity, buffer, *_args):
+        nonlocal latest_display_tap_perf_ms, latest_display_tap_wall_ms
+        latest_display_tap_perf_ms = time.perf_counter() * 1000
+        latest_display_tap_wall_ms = time.time_ns() // 1_000_000
+        record_frame_time(
+            frame_key(buffer),
+            "display_tap_ms",
+            latest_display_tap_perf_ms,
+            wall_ms=latest_display_tap_wall_ms,
+        )
+
+    if display_tap is not None:
+        display_tap.connect("handoff", on_display_handoff)
+
     bus = pipeline.get_bus()
     bus.add_signal_watch()
 
@@ -442,8 +540,9 @@ def main():
     def stop(_signum, _frame):
         loop.quit()
 
-    signal.signal(signal.SIGINT, stop)
-    signal.signal(signal.SIGTERM, stop)
+    if threading.current_thread() is threading.main_thread():
+        signal.signal(signal.SIGINT, stop)
+        signal.signal(signal.SIGTERM, stop)
 
     print(f"gst-ortm-player source={source} decoder={decoder} slot={args.slot} url={args.whep_url}", flush=True)
     pipeline.set_state(Gst.State.PLAYING)
@@ -456,6 +555,37 @@ def main():
             flush=True,
         )
     return 0
+
+
+_MACOS_CALLBACK = None
+_MACOS_ARGS = None
+
+
+def run_with_macos_main(args):
+    global _MACOS_CALLBACK, _MACOS_ARGS
+    lib_path = ctypes.util.find_library("gstreamer-1.0") or "/opt/homebrew/lib/libgstreamer-1.0.dylib"
+    lib = ctypes.CDLL(lib_path)
+    callback_type = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p)
+    _MACOS_ARGS = args
+
+    def callback(_user_data):
+        try:
+            return int(run_player(_MACOS_ARGS))
+        except BaseException as error:
+            print(f"ERROR: {error}", file=sys.stderr, flush=True)
+            return 1
+
+    _MACOS_CALLBACK = callback_type(callback)
+    lib.gst_macos_main_simple.argtypes = [callback_type, ctypes.c_void_p]
+    lib.gst_macos_main_simple.restype = ctypes.c_int
+    return int(lib.gst_macos_main_simple(_MACOS_CALLBACK, None))
+
+
+def main():
+    args = parse_args()
+    if args.display and sys.platform == "darwin" and not os.environ.get("GST_ORTM_NO_MACOS_MAIN"):
+        return run_with_macos_main(args)
+    return run_player(args)
 
 
 if __name__ == "__main__":
