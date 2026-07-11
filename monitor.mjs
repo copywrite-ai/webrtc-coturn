@@ -476,6 +476,48 @@ function prometheusSnapshot() {
     '# TYPE tunnel_monitor_up gauge',
     'tunnel_monitor_up 1',
   ];
+  for (const [slot, viewer] of Object.entries(state.viewer.latestBySlot)) {
+    const label = `slot="${prometheusLabelValue(slot)}",page="${prometheusLabelValue(viewer.page || '')}"`;
+    if (isMetricNumber(viewer.ortm)) {
+      lines.push(`tunnel_viewer_slot_ortm_ms{${label}} ${Number(viewer.ortm)}`);
+    }
+    if (isMetricNumber(viewer.ortmNet)) {
+      lines.push(`tunnel_viewer_slot_ortm_net_ms{${label}} ${Number(viewer.ortmNet)}`);
+    }
+    if (isMetricNumber(viewer.fallback)) {
+      lines.push(`tunnel_viewer_slot_fallback_ms{${label}} ${Number(viewer.fallback)}`);
+    }
+    if (isMetricNumber(viewer.upstream)) {
+      lines.push(`tunnel_viewer_slot_upstream_ms{${label}} ${Number(viewer.upstream)}`);
+    }
+    if (isMetricNumber(viewer.upstreamNet)) {
+      lines.push(`tunnel_viewer_slot_upstream_net_ms{${label}} ${Number(viewer.upstreamNet)}`);
+    }
+    if (isMetricNumber(viewer.browser)) {
+      lines.push(`tunnel_viewer_slot_browser_cost_ms{${label}} ${Number(viewer.browser)}`);
+    }
+    if (isMetricNumber(viewer.decode)) {
+      lines.push(`tunnel_viewer_slot_decode_cost_ms{${label}} ${Number(viewer.decode)}`);
+    }
+    if (isMetricNumber(viewer.rtcJitter)) {
+      lines.push(`tunnel_viewer_slot_rtc_jitter_buffer_ms{${label}} ${Number(viewer.rtcJitter)}`);
+    }
+    if (isMetricNumber(viewer.rtcDecode)) {
+      lines.push(`tunnel_viewer_slot_rtc_decode_ms{${label}} ${Number(viewer.rtcDecode)}`);
+    }
+    if (isMetricNumber(viewer.rtcFps)) {
+      lines.push(`tunnel_viewer_slot_rtc_fps{${label}} ${Number(viewer.rtcFps)}`);
+    }
+    if (isMetricNumber(viewer.rtcDrop)) {
+      lines.push(`tunnel_viewer_slot_rtc_frames_dropped{${label}} ${Number(viewer.rtcDrop)}`);
+    }
+    if (isMetricNumber(viewer.rtcBitrate)) {
+      lines.push(`tunnel_viewer_slot_rtc_bitrate_kbps{${label}} ${Number(viewer.rtcBitrate)}`);
+    }
+    if (isMetricNumber(viewer.rtcPacketsLost)) {
+      lines.push(`tunnel_viewer_slot_rtc_packets_lost{${label}} ${Number(viewer.rtcPacketsLost)}`);
+    }
+  }
   for (const [stream, item] of Object.entries(state.derived.streams)) {
     const label = `stream="${stream}"`;
     lines.push(`tunnel_stream_ready{${label}} ${item.ready ? 1 : 0}`);
@@ -556,6 +598,10 @@ function prometheusSnapshot() {
 
 function isMetricNumber(value) {
   return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+}
+
+function prometheusLabelValue(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
 }
 
 function sendJson(res, data) {
