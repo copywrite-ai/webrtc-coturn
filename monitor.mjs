@@ -316,6 +316,31 @@ function streamFromContainer(container) {
 }
 
 function parsePublisherMetricLine(line, fallbackStream) {
+  if (line.includes('FRAME encoded_size_bytes')) {
+    const frame = parseKeyValueMessage(line);
+    return {
+      kind: 'frame',
+      stream: frame.stream || fallbackStream,
+      encodedFrameSizeAvgBytes: frame.avg,
+      encodedFrameSizeMinBytes: frame.min,
+      encodedFrameSizeMaxBytes: frame.max,
+      encodedFrameSizeLastBytes: frame.last,
+      encodedFrameSamples: frame.samples,
+      keyframes: frame.keyframes,
+      deltaFrames: frame.delta,
+      keyframeLastBytes: frame.keyframe_last,
+      keyframeAvgBytes: frame.keyframe_avg,
+      keyframeMaxBytes: frame.keyframe_max,
+      deltaFrameAvgBytes: frame.delta_avg,
+      deltaFrameMaxBytes: frame.delta_max,
+      encodedBitrateKbps: frame.bitrate_kbps,
+      width: frame.width,
+      height: frame.height,
+      fps: frame.fps,
+      targetBitrateKbps: frame.target_bitrate_kbps,
+      keyInt: frame.key_int,
+    };
+  }
   const sender = line.match(/SENDER frame (?:stream=([^ ]+) )?seq=(\d+) timestamp_ms=(\d+)(?: render_ms=([0-9.]+))? overlay_to_send_ms=([0-9.]+)(?: encoded_to_send_ms=([0-9.-]+))? sender_pipeline_ms=([0-9.]+)/);
   if (sender) {
     return {
@@ -596,6 +621,57 @@ function prometheusSnapshot() {
     }
     if (isMetricNumber(item.publisher.renderMs)) {
       lines.push(`tunnel_publisher_ortm_render_ms{${label}} ${Number(item.publisher.renderMs)}`);
+    }
+    if (isMetricNumber(item.publisher.encodedFrameSizeLastBytes)) {
+      lines.push(`tunnel_publisher_encoded_frame_size_last_bytes{${label}} ${Number(item.publisher.encodedFrameSizeLastBytes)}`);
+    }
+    if (isMetricNumber(item.publisher.encodedFrameSizeAvgBytes)) {
+      lines.push(`tunnel_publisher_encoded_frame_size_avg_bytes{${label}} ${Number(item.publisher.encodedFrameSizeAvgBytes)}`);
+    }
+    if (isMetricNumber(item.publisher.encodedFrameSizeMinBytes)) {
+      lines.push(`tunnel_publisher_encoded_frame_size_min_bytes{${label}} ${Number(item.publisher.encodedFrameSizeMinBytes)}`);
+    }
+    if (isMetricNumber(item.publisher.encodedFrameSizeMaxBytes)) {
+      lines.push(`tunnel_publisher_encoded_frame_size_max_bytes{${label}} ${Number(item.publisher.encodedFrameSizeMaxBytes)}`);
+    }
+    if (isMetricNumber(item.publisher.keyframes)) {
+      lines.push(`tunnel_publisher_keyframes_total{${label}} ${Number(item.publisher.keyframes)}`);
+    }
+    if (isMetricNumber(item.publisher.deltaFrames)) {
+      lines.push(`tunnel_publisher_delta_frames_total{${label}} ${Number(item.publisher.deltaFrames)}`);
+    }
+    if (isMetricNumber(item.publisher.keyframeLastBytes)) {
+      lines.push(`tunnel_publisher_keyframe_size_last_bytes{${label}} ${Number(item.publisher.keyframeLastBytes)}`);
+    }
+    if (isMetricNumber(item.publisher.keyframeAvgBytes)) {
+      lines.push(`tunnel_publisher_keyframe_size_avg_bytes{${label}} ${Number(item.publisher.keyframeAvgBytes)}`);
+    }
+    if (isMetricNumber(item.publisher.keyframeMaxBytes)) {
+      lines.push(`tunnel_publisher_keyframe_size_max_bytes{${label}} ${Number(item.publisher.keyframeMaxBytes)}`);
+    }
+    if (isMetricNumber(item.publisher.deltaFrameAvgBytes)) {
+      lines.push(`tunnel_publisher_delta_frame_size_avg_bytes{${label}} ${Number(item.publisher.deltaFrameAvgBytes)}`);
+    }
+    if (isMetricNumber(item.publisher.deltaFrameMaxBytes)) {
+      lines.push(`tunnel_publisher_delta_frame_size_max_bytes{${label}} ${Number(item.publisher.deltaFrameMaxBytes)}`);
+    }
+    if (isMetricNumber(item.publisher.encodedBitrateKbps)) {
+      lines.push(`tunnel_publisher_encoded_bitrate_kbps{${label}} ${Number(item.publisher.encodedBitrateKbps)}`);
+    }
+    if (isMetricNumber(item.publisher.width)) {
+      lines.push(`tunnel_publisher_resolution_width{${label}} ${Number(item.publisher.width)}`);
+    }
+    if (isMetricNumber(item.publisher.height)) {
+      lines.push(`tunnel_publisher_resolution_height{${label}} ${Number(item.publisher.height)}`);
+    }
+    if (isMetricNumber(item.publisher.fps)) {
+      lines.push(`tunnel_publisher_target_fps{${label}} ${Number(item.publisher.fps)}`);
+    }
+    if (isMetricNumber(item.publisher.targetBitrateKbps)) {
+      lines.push(`tunnel_publisher_target_bitrate_kbps{${label}} ${Number(item.publisher.targetBitrateKbps)}`);
+    }
+    if (isMetricNumber(item.publisher.keyInt)) {
+      lines.push(`tunnel_publisher_key_int{${label}} ${Number(item.publisher.keyInt)}`);
     }
   }
   lines.push('');

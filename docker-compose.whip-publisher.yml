@@ -20,6 +20,8 @@ services:
         GST_PLUGINS_RS_REF: "${WHIP_GST_PLUGINS_RS_REF:-0.14.1}"
         PUBLISHER_BASE_IMAGE: "${WHIP_PUBLISHER_BASE_IMAGE:-tunnel-whip-publisher-base:ubuntu24.04-gst-rs-0.14.1}"
     image: tunnel-whip-publisher:local
+    cap_add:
+      - NET_ADMIN
     environment:
       STREAM_NAME: fish_front
       DEVICE_ID: "${DEVICE_ID:?DEVICE_ID is required}"

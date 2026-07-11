@@ -9,7 +9,7 @@ ARG GST_PLUGINS_RS_REF
 
 RUN set -eux; \
   apt-get update \
-  && apt-get install -y --no-install-recommends python3-cairo python3-gi-cairo \
+  && apt-get install -y --no-install-recommends iproute2 python3-cairo python3-gi-cairo \
   && rm -rf /var/lib/apt/lists/*
 
 COPY publish-whip.sh /usr/local/bin/publish-whip.sh

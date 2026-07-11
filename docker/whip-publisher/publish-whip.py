@@ -39,6 +39,10 @@ def env_int(name, default):
     return int(env_value(name, str(default)))
 
 
+def env_float(name, default):
+    return float(env_value(name, str(default)))
+
+
 def gst_quote(value):
     escaped = value.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
@@ -147,6 +151,71 @@ class StatsWindow:
 
     def avg(self):
         return self.total_ms / self.count if self.count else 0.0
+
+
+class EncodedFrameStats:
+    def __init__(self, window_seconds):
+        self.window_ns = int(max(window_seconds, 0.1) * 1_000_000_000)
+        self.count = 0
+        self.total_bytes = 0
+        self.min_bytes = None
+        self.max_bytes = None
+        self.last_bytes = 0
+        self.keyframe_count = 0
+        self.keyframe_total_bytes = 0
+        self.keyframe_last_bytes = 0
+        self.keyframe_max_bytes = 0
+        self.delta_count = 0
+        self.delta_total_bytes = 0
+        self.delta_max_bytes = 0
+        self.byte_window = deque()
+        self.byte_window_total = 0
+
+    def add(self, now_ns, size_bytes, is_keyframe):
+        self.count += 1
+        self.total_bytes += size_bytes
+        self.last_bytes = size_bytes
+        self.min_bytes = (
+            size_bytes if self.min_bytes is None else min(self.min_bytes, size_bytes)
+        )
+        self.max_bytes = (
+            size_bytes if self.max_bytes is None else max(self.max_bytes, size_bytes)
+        )
+        if is_keyframe:
+            self.keyframe_count += 1
+            self.keyframe_total_bytes += size_bytes
+            self.keyframe_last_bytes = size_bytes
+            self.keyframe_max_bytes = max(self.keyframe_max_bytes, size_bytes)
+        else:
+            self.delta_count += 1
+            self.delta_total_bytes += size_bytes
+            self.delta_max_bytes = max(self.delta_max_bytes, size_bytes)
+
+        self.byte_window.append((now_ns, size_bytes))
+        self.byte_window_total += size_bytes
+        cutoff = now_ns - self.window_ns
+        while self.byte_window and self.byte_window[0][0] < cutoff:
+            _timestamp, old_size = self.byte_window.popleft()
+            self.byte_window_total -= old_size
+
+    def avg_bytes(self):
+        return self.total_bytes / self.count if self.count else 0.0
+
+    def keyframe_avg_bytes(self):
+        return (
+            self.keyframe_total_bytes / self.keyframe_count
+            if self.keyframe_count
+            else 0.0
+        )
+
+    def delta_avg_bytes(self):
+        return self.delta_total_bytes / self.delta_count if self.delta_count else 0.0
+
+    def window_bitrate_kbps(self, now_ns):
+        if len(self.byte_window) < 2:
+            return 0.0
+        elapsed_ns = max(now_ns - self.byte_window[0][0], 1)
+        return (self.byte_window_total * 8.0) / (elapsed_ns / 1_000_000_000.0) / 1000.0
 
 
 class ORTMOverlayRenderer:
@@ -322,6 +391,7 @@ def main():
     timestamp_tz = ZoneInfo(timestamp_tz_name)
     metrics_enabled = env_value("PIPELINE_METRICS", "1")
     metrics_interval_frames = env_int("PIPELINE_METRICS_INTERVAL_FRAMES", 30)
+    frame_metrics_window_seconds = env_float("FRAME_METRICS_WINDOW_SECONDS", 2.0)
     sender_frame_log_interval = env_int("SENDER_FRAME_LOG_INTERVAL", 30)
     ortm_x = env_int("ORTM_X", 24)
     ortm_y = env_int("ORTM_Y", 24)
@@ -427,6 +497,7 @@ def main():
         pre_encoder_times = deque()
         post_encoder_times = deque()
         post_parse_times = deque()
+        encoded_frame_stats = EncodedFrameStats(frame_metrics_window_seconds)
 
         def make_stats():
             return {
@@ -470,6 +541,31 @@ def main():
                 f"min={stats['min_ms']:.1f} "
                 f"max={stats['max_ms']:.1f} "
                 f"samples={stats['count']}",
+                flush=True,
+            )
+
+        def print_frame_metrics(now_ns):
+            print(
+                "FRAME encoded_size_bytes "
+                f"stream={stream_name} "
+                f"avg={encoded_frame_stats.avg_bytes():.1f} "
+                f"min={(encoded_frame_stats.min_bytes or 0)} "
+                f"max={(encoded_frame_stats.max_bytes or 0)} "
+                f"last={encoded_frame_stats.last_bytes} "
+                f"samples={encoded_frame_stats.count} "
+                f"keyframes={encoded_frame_stats.keyframe_count} "
+                f"delta={encoded_frame_stats.delta_count} "
+                f"keyframe_last={encoded_frame_stats.keyframe_last_bytes} "
+                f"keyframe_avg={encoded_frame_stats.keyframe_avg_bytes():.1f} "
+                f"keyframe_max={encoded_frame_stats.keyframe_max_bytes} "
+                f"delta_avg={encoded_frame_stats.delta_avg_bytes():.1f} "
+                f"delta_max={encoded_frame_stats.delta_max_bytes} "
+                f"bitrate_kbps={encoded_frame_stats.window_bitrate_kbps(now_ns):.1f} "
+                f"width={width} "
+                f"height={height} "
+                f"fps={fps} "
+                f"target_bitrate_kbps={bitrate_kbps} "
+                f"key_int={key_int_max}",
                 flush=True,
             )
 
@@ -526,6 +622,9 @@ def main():
                 return Gst.PadProbeReturn.OK
 
             now = monotonic_ns()
+            encoded_size_bytes = buffer.get_size()
+            is_keyframe = not buffer.has_flags(Gst.BufferFlags.DELTA_UNIT)
+            encoded_frame_stats.add(now, encoded_size_bytes, is_keyframe)
             encoded_to_send_ms = None
             if post_parse_times:
                 started_at = post_parse_times.popleft()
@@ -554,19 +653,28 @@ def main():
                 sender_pipeline_ms = sender_now_ms - frame_marker["timestamp_ms_full"]
                 print(
                     "SENDER frame "
+                    f"stream={stream_name} "
                     f"seq={frame_marker['frame_seq']} "
                     f"timestamp_ms={frame_marker['timestamp_ms_full']} "
                     f"render_ms={frame_marker['render_ms']:.1f} "
                     f"overlay_to_send_ms={overlay_to_send_ms:.1f} "
                     f"encoded_to_send_ms={(encoded_to_send_ms if encoded_to_send_ms is not None else -1):.1f} "
                     f"sender_pipeline_ms={sender_pipeline_ms} "
-                    f"sender_now_ms={sender_now_ms}",
+                    f"sender_now_ms={sender_now_ms} "
+                    f"encoded_size_bytes={encoded_size_bytes} "
+                    f"keyframe={1 if is_keyframe else 0} "
+                    f"width={width} "
+                    f"height={height} "
+                    f"fps={fps} "
+                    f"target_bitrate_kbps={bitrate_kbps} "
+                    f"key_int={key_int_max}",
                     flush=True,
                 )
 
             if metric_stats["overlay_to_send_ms"]["count"] % metrics_interval_frames == 0:
                 for metric_name, stats in metric_stats.items():
                     print_metric(metric_name, stats)
+                print_frame_metrics(now)
                 print(
                     "PIPELINE dropped_pts "
                     f"value={pipeline_dropped}",
