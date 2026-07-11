@@ -12,7 +12,7 @@
     headGlowColor: 'rgba(15, 118, 110, 0.16)',
     leftFadePx: 12,
     paddingPx: 6,
-    rightAnchorRatio: 0.94,
+    rightAnchorRatio: 1,
     leftAnchorEase: 0.15,
     rightHeadEase: 0.18,
     valueEase: 0.14,
@@ -232,17 +232,19 @@
       this.drawMonotone(drawPoints);
       ctx.stroke();
 
+      ctx.restore();
+
       const head = drawPoints[drawPoints.length - 1];
+      const headRadius = 2.1 * dpr;
+      const visibleHeadX = Math.max(left + headRadius, Math.min(right - headRadius, head.x));
       ctx.fillStyle = this.opts.headGlowColor;
       ctx.beginPath();
-      ctx.arc(head.x, head.y, 7 * dpr, 0, Math.PI * 2);
+      ctx.arc(visibleHeadX, head.y, 7 * dpr, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = this.opts.headDotColor;
       ctx.beginPath();
-      ctx.arc(head.x, head.y, 2.1 * dpr, 0, Math.PI * 2);
+      ctx.arc(visibleHeadX, head.y, headRadius, 0, Math.PI * 2);
       ctx.fill();
-
-      ctx.restore();
 
       ctx.fillStyle = this.opts.timeoutDotColor;
       for (const p of visible) {
