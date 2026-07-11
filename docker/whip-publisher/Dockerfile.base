@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 ARG UBUNTU_VERSION=24.04
 ARG BASE_IMAGE=docker.1ms.run/library/ubuntu:${UBUNTU_VERSION}
 ARG APT_MIRROR=http://mirrors.ustc.edu.cn
@@ -79,20 +81,29 @@ RUN mkdir -p /root/.cargo \
     'git-fetch-with-cli = true' \
     > /root/.cargo/config.toml
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --profile minimal \
-  && cargo install cargo-c
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/root/.cargo/git \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+      | sh -s -- -y --profile minimal \
+  && rustup default stable \
+  && cargo install --locked cargo-c
 
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
-RUN git clone --depth 1 --branch "${GST_PLUGINS_RS_REF}" \
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/root/.cargo/git \
+    --mount=type=cache,target=/tmp/gst-plugins-rs-target \
+    git clone --depth 1 --branch "${GST_PLUGINS_RS_REF}" \
     https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git /tmp/gst-plugins-rs \
   && mkdir -p /opt/gst-plugins-rs \
   && cd /tmp/gst-plugins-rs \
+  && export CARGO_TARGET_DIR=/tmp/gst-plugins-rs-target \
+  && cargo cinstall -p gst-plugin-rtp --prefix=/opt/gst-plugins-rs --release \
   && cargo cinstall -p gst-plugin-webrtc --prefix=/opt/gst-plugins-rs --release \
   && cargo cinstall -p gst-plugin-webrtchttp --prefix=/opt/gst-plugins-rs --release \
   && ln -s "/opt/gst-plugins-rs/lib/$(gcc -dumpmachine)" /opt/gst-plugins-rs/lib/gstreamer-runtime \
   && rm -rf /tmp/gst-plugins-rs
 
 RUN gst-inspect-1.0 whipclientsink >/dev/null \
+  && gst-inspect-1.0 rtpgccbwe >/dev/null \
   && gst-inspect-1.0 cairooverlay >/dev/null
