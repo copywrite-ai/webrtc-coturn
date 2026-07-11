@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WHEP Canvas Player</title>
+    <style>
+      :root {
+        --bg: #eef2f7;
+        --panel: #fff;
+        --line: rgba(15, 23, 42, 0.12);
+        --text: #0f172a;
+        --muted: #64748b;
+        --accent: #0f766e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 12px/1.35 "SF Pro Text", "PingFang SC", sans-serif;
+        color: var(--text);
+        background: linear-gradient(180deg, #f8fafc, var(--bg));
+      }
+      .wrap {
+        width: min(1280px, calc(100% - 16px));
+        margin: 8px auto;
+        display: grid;
+        gap: 8px;
+      }
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 8px;
+      }
+      .toolbar {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 6px;
+        align-items: center;
+      }
+      input, button {
+        font: inherit;
+      }
+      input {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 5px 7px;
+      }
+      button {
+        min-width: 64px;
+        border: 0;
+        border-radius: 6px;
+        padding: 6px 10px;
+        background: #dbeafe;
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        color: white;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .metric {
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 6px;
+        background: #f8fafc;
+        padding: 5px 6px;
+        min-width: 0;
+      }
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .metric strong {
+        display: block;
+        margin-top: 2px;
+        font-size: 13px;
+      }
+      .stage {
+        background: #020617;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      canvas {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        display: block;
+        background: #020617;
+      }
+      video {
+        position: fixed;
+        width: 2px;
+        height: 2px;
+        opacity: 0.01;
+        pointer-events: none;
+        left: -10px;
+        top: -10px;
+      }
+      .log {
+        max-height: 180px;
+        overflow: auto;
+        white-space: pre-wrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        background: #111827;
+        color: #e5e7eb;
+        border-radius: 8px;
+        padding: 8px;
+      }
+      @media (max-width: 900px) {
+        .toolbar,
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="panel toolbar">
+        <input id="whepUrl" value="http://127.0.0.1:9001/fish_front/whep" />
+        <button class="primary" id="startBtn">连接</button>
+        <button id="stopBtn">停止</button>
+      </section>
+
+      <section class="panel metrics">
+        <div class="metric"><span>状态</span><strong id="status">idle</strong></div>
+        <div class="metric"><span>ORTM</span><strong id="ortm">--</strong></div>
+        <div class="metric"><span>FPS</span><strong id="fps">--</strong></div>
+        <div class="metric"><span>码率</span><strong id="bitrate">--</strong></div>
+        <div class="metric"><span>jitter</span><strong id="jitter">--</strong></div>
+        <div class="metric"><span>decode</span><strong id="decode">--</strong></div>
+        <div class="metric"><span>rvfc lead</span><strong id="lead">--</strong></div>
+        <div class="metric"><span>canvas</span><strong id="cost">--</strong></div>
+      </section>
+
+      <section class="stage">
+        <canvas id="canvas" width="1280" height="720"></canvas>
+        <video id="video" autoplay playsinline muted></video>
+      </section>
+
+      <section class="panel">
+        <div id="log" class="log"></div>
+      </section>
+    </div>
+
+    <script>
+      const BUILD_VERSION = '2026-07-11-whep-canvas-player-1';
+      const ORTM = {
+        x: 24,
+        y: 24,
+        cell: 12,
+        padding: 12,
+        gridSize: 32,
+        finderSize: 4,
+        timingIndex: 4,
+      };
+      const PAYLOAD_BITS = 68;
+      const MAX_LATENCY_MS = 5000;
+
+      const whepUrlEl = document.getElementById('whepUrl');
+      const startBtn = document.getElementById('startBtn');
+      const stopBtn = document.getElementById('stopBtn');
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
+      const logEl = document.getElementById('log');
+      const metricEls = {
+        status: document.getElementById('status'),
+        ortm: document.getElementById('ortm'),
+        fps: document.getElementById('fps'),
+        bitrate: document.getElementById('bitrate'),
+        jitter: document.getElementById('jitter'),
+        decode: document.getElementById('decode'),
+        lead: document.getElementById('lead'),
+        cost: document.getElementById('cost'),
+      };
+
+      let pc = null;
+      let sessionUrl = null;
+      let frameCallbackId = null;
+      let statsTimer = null;
+      let lastInbound = null;
+      let lastLogAt = 0;
+      let lastMetrics = {};
+      const peerId = globalThis.crypto?.randomUUID?.() || `canvas-${Date.now()}`;
+
+      function log(message) {
+        const line = `${new Date().toISOString()} ${message}`;
+        logEl.textContent += `${line}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+        console.log(line);
+      }
+
+      function setStatus(value) {
+        metricEls.status.textContent = value;
+      }
+
+      function formatMs(value) {
+        return Number.isFinite(value) ? `${value.toFixed(value >= 100 ? 0 : 1)} ms` : '--';
+      }
+
+      function formatNumber(value) {
+        return Number.isFinite(value) ? value.toFixed(value >= 100 ? 0 : 1) : '--';
+      }
+
+      function absoluteUrl(value) {
+        return new URL(String(value || '').trim(), location.href).toString();
+      }
+
+      function queueClientLog(message) {
+        fetch('/client-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          keepalive: true,
+          body: JSON.stringify({
+            peerId,
+            page: location.href,
+            group: 'metrics',
+            level: 'info',
+            message,
+          }),
+        }).catch(() => {});
+      }
+
+      function crc16CcittFalse(bytes) {
+        let crc = 0xffff;
+        for (const byte of bytes) {
+          crc ^= byte << 8;
+          for (let index = 0; index < 8; index += 1) {
+            crc = (crc & 0x8000) ? (((crc << 1) ^ 0x1021) & 0xffff) : ((crc << 1) & 0xffff);
+          }
+        }
+        return crc;
+      }
+
+      function inFinder(row, col) {
+        const f = ORTM.finderSize;
+        const n = ORTM.gridSize;
+        return (
+          (row < f && col < f) ||
+          (row < f && col >= n - f) ||
+          (row >= n - f && col < f) ||
+          (row >= n - f && col >= n - f)
+        );
+      }
+
+      function reserved(row, col) {
+        return inFinder(row, col) || row === ORTM.timingIndex || col === ORTM.timingIndex;
+      }
+
+      function finderBit(localRow, localCol) {
+        return localRow === 0 || localRow === ORTM.finderSize - 1 || localCol === 0 || localCol === ORTM.finderSize - 1 ? 1 : 0;
+      }
+
+      function bitsToNumber(bits, offset, width) {
+        let value = 0;
+        for (let index = 0; index < width; index += 1) {
+          value = (value << 1) | bits[offset + index];
+        }
+        return value >>> 0;
+      }
+
+      function sampleCell(imageData, row, col) {
+        const positions = [0.2, 0.5, 0.8];
+        const originX = ORTM.x + ORTM.padding + col * ORTM.cell;
+        const originY = ORTM.y + ORTM.padding + row * ORTM.cell;
+        let total = 0;
+        let count = 0;
+        for (const px of positions) {
+          for (const py of positions) {
+            const x = Math.round(originX + ORTM.cell * px);
+            const y = Math.round(originY + ORTM.cell * py);
+            const offset = (y * imageData.width + x) * 4;
+            const r = imageData.data[offset];
+            const g = imageData.data[offset + 1];
+            const b = imageData.data[offset + 2];
+            total += 0.299 * r + 0.587 * g + 0.114 * b;
+            count += 1;
+          }
+        }
+        return total / count;
+      }
+
+      function decodeOrtm(imageData, nowMs) {
+        const markerSize = ORTM.gridSize * ORTM.cell;
+        const boxSize = markerSize + ORTM.padding * 2;
+        if (ORTM.x + boxSize > imageData.width || ORTM.y + boxSize > imageData.height) {
+          return null;
+        }
+        const lumaGrid = [];
+        let minLuma = Infinity;
+        let maxLuma = -Infinity;
+        for (let row = 0; row < ORTM.gridSize; row += 1) {
+          const lumaRow = [];
+          for (let col = 0; col < ORTM.gridSize; col += 1) {
+            const luma = sampleCell(imageData, row, col);
+            lumaRow.push(luma);
+            minLuma = Math.min(minLuma, luma);
+            maxLuma = Math.max(maxLuma, luma);
+          }
+          lumaGrid.push(lumaRow);
+        }
+        const contrast = maxLuma - minLuma;
+        if (contrast < 32) return null;
+        const threshold = (minLuma + maxLuma) / 2;
+        const bits = lumaGrid.map((row) => row.map((luma) => (luma < threshold ? 1 : 0)));
+        let finderErrors = 0;
+        let timingErrors = 0;
+        for (let row = 0; row < ORTM.gridSize; row += 1) {
+          for (let col = 0; col < ORTM.gridSize; col += 1) {
+            if (inFinder(row, col)) {
+              const localRow = row < ORTM.finderSize ? row : row - (ORTM.gridSize - ORTM.finderSize);
+              const localCol = col < ORTM.finderSize ? col : col - (ORTM.gridSize - ORTM.finderSize);
+              if (bits[row][col] !== finderBit(localRow, localCol)) finderErrors += 1;
+            } else if (row === ORTM.timingIndex && bits[row][col] !== (col % 2)) {
+              timingErrors += 1;
+            } else if (col === ORTM.timingIndex && bits[row][col] !== (row % 2)) {
+              timingErrors += 1;
+            }
+          }
+        }
+        if (finderErrors > 8 || timingErrors > 10) return null;
+        const payload = [];
+        for (let row = 0; row < ORTM.gridSize; row += 1) {
+          for (let col = 0; col < ORTM.gridSize; col += 1) {
+            if (!reserved(row, col)) payload.push(bits[row][col]);
+          }
+        }
+        if (payload.length < PAYLOAD_BITS) return null;
+        const version = bitsToNumber(payload, 0, 4);
+        const frameSeq = bitsToNumber(payload, 4, 16);
+        const timestampMs = bitsToNumber(payload, 20, 32);
+        const crc16 = bitsToNumber(payload, 52, 16);
+        const expected = crc16CcittFalse(new Uint8Array([
+          version & 0x0f,
+          (frameSeq >>> 8) & 0xff,
+          frameSeq & 0xff,
+          (timestampMs >>> 24) & 0xff,
+          (timestampMs >>> 16) & 0xff,
+          (timestampMs >>> 8) & 0xff,
+          timestampMs & 0xff,
+        ]));
+        if (crc16 !== expected) return null;
+        const latencyMs = ((nowMs >>> 0) - timestampMs) >>> 0;
+        if (latencyMs >= MAX_LATENCY_MS) return null;
+        return { latencyMs, frameSeq, finderErrors, timingErrors, contrast };
+      }
+
+      function waitForIceGatheringComplete(connection) {
+        if (connection.iceGatheringState === 'complete') return Promise.resolve();
+        return new Promise((resolve) => {
+          const onChange = () => {
+            if (connection.iceGatheringState === 'complete') {
+              connection.removeEventListener('icegatheringstatechange', onChange);
+              resolve();
+            }
+          };
+          connection.addEventListener('icegatheringstatechange', onChange);
+        });
+      }
+
+      function resizeCanvas() {
+        if (!video.videoWidth || !video.videoHeight) return false;
+        if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
+        if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
+        return true;
+      }
+
+      function emitMetrics() {
+        const now = performance.now();
+        if (now - lastLogAt < 1000) return;
+        lastLogAt = now;
+        const line = [
+          'slot=Front',
+          `ice=${pc?.iceConnectionState || 'idle'}`,
+          `resolution=${canvas.width}x${canvas.height}`,
+          `ortm=${Number.isFinite(lastMetrics.ortm) ? `${Math.round(lastMetrics.ortm)}ms` : '--'}`,
+          'ortmNet=--',
+          'fallback=--',
+          `upstream=${Number.isFinite(lastMetrics.ortm) ? `${Math.round(lastMetrics.ortm)}ms` : '--'}`,
+          'upstreamNet=--',
+          'decodeMode=canvas-rvfc',
+          `browser=${formatMs(lastMetrics.canvasCost).replace(' ', '')}`,
+          `draw=${formatMs(lastMetrics.draw).replace(' ', '')}`,
+          `read=${formatMs(lastMetrics.read).replace(' ', '')}`,
+          `decode=${formatMs(lastMetrics.ortmDecode).replace(' ', '')}`,
+          `rtcJitter=${formatMs(lastMetrics.rtcJitter).replace(' ', '')}`,
+          `rtcDecode=${formatMs(lastMetrics.rtcDecode).replace(' ', '')}`,
+          `rtcFps=${formatNumber(lastMetrics.rtcFps)}`,
+          `rtcDrop=${formatNumber(lastMetrics.rtcDrop)}`,
+          `rtcBitrate=${Number.isFinite(lastMetrics.rtcBitrate) ? `${lastMetrics.rtcBitrate.toFixed(0)}kbps` : '--'}`,
+          `rtcPacketsLost=${formatNumber(lastMetrics.rtcPacketsLost)}`,
+          `rvfcLead=${formatMs(lastMetrics.rvfcLead).replace(' ', '')}`,
+          `rvfcPresentationAge=${formatMs(lastMetrics.rvfcPresentationAge).replace(' ', '')}`,
+          'status=playing',
+        ].join(' ');
+        queueClientLog(line);
+      }
+
+      function onVideoFrame(now, metadata) {
+        frameCallbackId = null;
+        if (!pc || !video.srcObject) return;
+        try {
+          if (resizeCanvas()) {
+            const drawStart = performance.now();
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const drawEnd = performance.now();
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const readEnd = performance.now();
+            const result = decodeOrtm(imageData, Date.now());
+            const decodeEnd = performance.now();
+            lastMetrics.draw = drawEnd - drawStart;
+            lastMetrics.read = readEnd - drawEnd;
+            lastMetrics.ortmDecode = decodeEnd - readEnd;
+            lastMetrics.canvasCost = decodeEnd - drawStart;
+            lastMetrics.rvfcLead = metadata?.expectedDisplayTime - now;
+            lastMetrics.rvfcPresentationAge = now - metadata?.presentationTime;
+            if (result) {
+              lastMetrics.ortm = result.latencyMs;
+              metricEls.ortm.textContent = `${Math.round(result.latencyMs)} ms`;
+            }
+            metricEls.lead.textContent = formatMs(lastMetrics.rvfcLead);
+            metricEls.cost.textContent = formatMs(lastMetrics.canvasCost);
+            emitMetrics();
+          }
+        } catch (error) {
+          log(`frame error: ${error.message}`);
+        }
+        frameCallbackId = video.requestVideoFrameCallback(onVideoFrame);
+      }
+
+      function updateStats(inbound) {
+        if (!inbound) return;
+        const current = {
+          timestamp: Number.isFinite(inbound.timestamp) ? inbound.timestamp : null,
+          bytesReceived: Number.isFinite(inbound.bytesReceived) ? inbound.bytesReceived : null,
+          jitterBufferDelay: Number.isFinite(inbound.jitterBufferDelay) ? inbound.jitterBufferDelay : null,
+          jitterBufferEmittedCount: Number.isFinite(inbound.jitterBufferEmittedCount) ? inbound.jitterBufferEmittedCount : null,
+          totalDecodeTime: Number.isFinite(inbound.totalDecodeTime) ? inbound.totalDecodeTime : null,
+          framesDecoded: Number.isFinite(inbound.framesDecoded) ? inbound.framesDecoded : null,
+        };
+        if (lastInbound && current.timestamp != null && lastInbound.timestamp != null) {
+          const elapsed = (current.timestamp - lastInbound.timestamp) / 1000;
+          if (elapsed > 0 && current.bytesReceived != null && lastInbound.bytesReceived != null) {
+            lastMetrics.rtcBitrate = ((current.bytesReceived - lastInbound.bytesReceived) * 8) / elapsed / 1000;
+          }
+          if (
+            current.jitterBufferDelay != null &&
+            lastInbound.jitterBufferDelay != null &&
+            current.jitterBufferEmittedCount != null &&
+            lastInbound.jitterBufferEmittedCount != null
+          ) {
+            const emitted = current.jitterBufferEmittedCount - lastInbound.jitterBufferEmittedCount;
+            if (emitted > 0) lastMetrics.rtcJitter = ((current.jitterBufferDelay - lastInbound.jitterBufferDelay) / emitted) * 1000;
+          }
+          if (
+            current.totalDecodeTime != null &&
+            lastInbound.totalDecodeTime != null &&
+            current.framesDecoded != null &&
+            lastInbound.framesDecoded != null
+          ) {
+            const decoded = current.framesDecoded - lastInbound.framesDecoded;
+            if (decoded > 0) lastMetrics.rtcDecode = ((current.totalDecodeTime - lastInbound.totalDecodeTime) / decoded) * 1000;
+          }
+        }
+        lastInbound = current;
+        lastMetrics.rtcFps = Number.isFinite(inbound.framesPerSecond) ? inbound.framesPerSecond : NaN;
+        lastMetrics.rtcDrop = Number.isFinite(inbound.framesDropped) ? inbound.framesDropped : NaN;
+        lastMetrics.rtcPacketsLost = Number.isFinite(inbound.packetsLost) ? inbound.packetsLost : NaN;
+        metricEls.fps.textContent = formatNumber(lastMetrics.rtcFps);
+        metricEls.bitrate.textContent = Number.isFinite(lastMetrics.rtcBitrate) ? `${lastMetrics.rtcBitrate.toFixed(0)} kbps` : '--';
+        metricEls.jitter.textContent = formatMs(lastMetrics.rtcJitter);
+        metricEls.decode.textContent = formatMs(lastMetrics.rtcDecode);
+      }
+
+      async function stop() {
+        if (statsTimer) clearInterval(statsTimer);
+        statsTimer = null;
+        if (frameCallbackId != null && typeof video.cancelVideoFrameCallback === 'function') {
+          video.cancelVideoFrameCallback(frameCallbackId);
+        }
+        frameCallbackId = null;
+        if (sessionUrl) {
+          try { await fetch(sessionUrl, { method: 'DELETE' }); } catch {}
+        }
+        sessionUrl = null;
+        if (pc) pc.close();
+        pc = null;
+        video.srcObject = null;
+        lastInbound = null;
+        lastMetrics = {};
+        setStatus('idle');
+      }
+
+      async function start() {
+        await stop();
+        const whepUrl = absoluteUrl(whepUrlEl.value);
+        pc = new RTCPeerConnection({ iceServers: [] });
+        pc.addTransceiver('video', { direction: 'recvonly' });
+        pc.oniceconnectionstatechange = () => {
+          setStatus(pc.iceConnectionState);
+          log(`ICE=${pc.iceConnectionState}`);
+        };
+        pc.ontrack = (event) => {
+          video.srcObject = event.streams[0];
+          try {
+            for (const receiver of pc.getReceivers()) {
+              if ('playoutDelayHint' in receiver) receiver.playoutDelayHint = 0;
+            }
+          } catch {}
+          video.play().catch((error) => log(`video play failed: ${error.message}`));
+          frameCallbackId = video.requestVideoFrameCallback(onVideoFrame);
+          log('remote track received, canvas renderer started');
+        };
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await waitForIceGatheringComplete(pc);
+        const response = await fetch(whepUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/sdp' },
+          body: pc.localDescription.sdp,
+        });
+        if (!response.ok) {
+          throw new Error(`WHEP failed ${response.status}: ${(await response.text()).slice(0, 200)}`);
+        }
+        const location = response.headers.get('Location');
+        sessionUrl = location ? new URL(location, whepUrl).toString() : null;
+        await pc.setRemoteDescription({ type: 'answer', sdp: await response.text() });
+        statsTimer = setInterval(async () => {
+          if (!pc) return;
+          const stats = await pc.getStats();
+          let inbound = null;
+          stats.forEach((report) => {
+            if (report.type === 'inbound-rtp' && report.kind === 'video') inbound = report;
+          });
+          updateStats(inbound);
+        }, 1000);
+        log(`connected ${whepUrl}`);
+      }
+
+      startBtn.addEventListener('click', () => start().catch((error) => {
+        setStatus('error');
+        log(error.message);
+      }));
+      stopBtn.addEventListener('click', () => stop());
+      log(`canvas player ready build=${BUILD_VERSION}`);
+    </script>
+  </body>
+</html>
