@@ -43,7 +43,7 @@ services:
     container_name: mediamtx
     restart: unless-stopped
     volumes:
-      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+      - ${MEDIAMTX_CONFIG:-./mediamtx/mediamtx.yml}:/mediamtx.yml:ro
     extra_hosts:
       - "peng-mbp14.li-adder.ts.net:host-gateway"
     ports:
@@ -55,3 +55,66 @@ services:
       - "8000:8000/udp"
       - "8001:8001/udp"
       - "8189:8189/udp"
+
+  monitor:
+    build:
+      context: .
+    image: webrtc-relay-demo:local
+    container_name: tunnel-monitor
+    command: ["node", "monitor.mjs"]
+    environment:
+      MONITOR_PORT: "${MONITOR_PORT:-9010}"
+      MEDIAMTX_API_ORIGIN: "${MEDIAMTX_API_ORIGIN:-http://mediamtx:9997}"
+      MEDIAMTX_METRICS_ORIGIN: "${MEDIAMTX_METRICS_ORIGIN:-http://mediamtx:9998}"
+      MEDIAMTX_USERNAME: "${MEDIAMTX_USERNAME:-metrics}"
+      MEDIAMTX_PASSWORD: "${MEDIAMTX_PASSWORD:-metrics123}"
+      CLIENT_LOG_PATH: "/app/logs/client-events.log"
+      PUBLISHER_CONTAINERS: "${PUBLISHER_CONTAINERS:-tunnel-fish_front_whip-1,tunnel-fish_back_whip-1,tunnel-fish_left_whip-1,tunnel-fish_right_whip-1,tunnel-fish_front_remote_whip-1}"
+      MONITOR_STREAMS: "${MONITOR_STREAMS:-fish_front,fish_back,fish_left,fish_right}"
+    depends_on:
+      - mediamtx
+    volumes:
+      - ./logs:/app/logs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "${MONITOR_PORT:-9010}:${MONITOR_PORT:-9010}"
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: tunnel-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-2d}"
+      - "--web.enable-lifecycle"
+    depends_on:
+      - mediamtx
+      - monitor
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+
+  grafana:
+    image: grafana/grafana:11.5.0
+    container_name: tunnel-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "${GRAFANA_ANONYMOUS_ENABLED:-false}"
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+
+volumes:
+  prometheus-data:
+  grafana-data:

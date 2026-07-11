@@ -1,0 +1,73 @@
+logLevel: info
+logDestinations: [stdout]
+
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+        path:
+      - action: read
+        path:
+      - action: playback
+        path:
+  - user: metrics
+    pass: metrics123
+    ips: []
+    permissions:
+      - action: api
+      - action: metrics
+      - action: pprof
+
+api: true
+apiAddress: :9997
+
+metrics: true
+metricsAddress: :9998
+
+pprof: true
+pprofAddress: :9999
+
+hls: false
+rtsp: true
+rtmp: false
+srt: false
+moq: false
+
+webrtc: true
+webrtcAddress: :8889
+webrtcEncryption: false
+webrtcAllowOrigins: ["*"]
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: ""
+webrtcIPsFromInterfaces: false
+webrtcIPsFromInterfacesList: []
+webrtcAdditionalHosts:
+  - 127.0.0.1
+  - localhost
+  - mediamtx
+  - peng-mbp14.li-adder.ts.net
+
+# Direct/local profile: do not configure server-side STUN/TURN.
+# This keeps WHEP direct tests from touching coturn.
+webrtcICEServers2: []
+
+pathDefaults:
+  source: publisher
+  overridePublisher: true
+  alwaysAvailable: true
+  alwaysAvailableTracks:
+    - codec: H264
+
+paths:
+  online: {}
+  fish_front: {}
+  fish_back: {}
+  fish_left: {}
+  fish_right: {}
+  "peng-mbp14/fish_front": {}
+  "peng-mbp14/fish_back": {}
+  "peng-mbp14/fish_left": {}
+  "peng-mbp14/fish_right": {}

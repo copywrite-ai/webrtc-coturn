@@ -276,11 +276,14 @@ def build_pipeline_description(
         "! cairooverlay name=ortm_overlay "
         "! videoconvert "
         "! video/x-raw,format=I420 "
+        "! identity name=pre_encoder_probe silent=true "
         f"! x264enc name=encoder bitrate={bitrate_kbps} speed-preset={gst_quote(speed_preset)} "
         f"tune=zerolatency key-int-max={key_int_max} bframes=0 "
         f"option-string={gst_quote(x264_option_string)} "
+        "! identity name=post_encoder_probe silent=true "
         "! video/x-h264,profile=baseline "
         "! h264parse name=h264parse0 config-interval=-1 "
+        "! identity name=post_parse_probe silent=true "
         "! identity name=send_probe silent=true "
         f"! whipclientsink name=ws {' '.join(sink_args)}"
     )
@@ -421,52 +424,131 @@ def main():
 
     if metrics_enabled == "1":
         overlay_frame_times = deque()
-        overlay_send_stats = {
-            "count": 0,
-            "total_ms": 0.0,
-            "min_ms": None,
-            "max_ms": None,
-            "dropped": 0,
+        pre_encoder_times = deque()
+        post_encoder_times = deque()
+        post_parse_times = deque()
+
+        def make_stats():
+            return {
+                "count": 0,
+                "total_ms": 0.0,
+                "min_ms": None,
+                "max_ms": None,
+            }
+
+        metric_stats = {
+            "overlay_to_encoder_ms": make_stats(),
+            "encoder_ms": make_stats(),
+            "parse_ms": make_stats(),
+            "encoded_to_send_ms": make_stats(),
+            "overlay_to_send_ms": make_stats(),
         }
+        pipeline_dropped = 0
+
+        def record_stat(metric_name, delay_ms):
+            stats = metric_stats[metric_name]
+            stats["count"] += 1
+            stats["total_ms"] += delay_ms
+            stats["min_ms"] = (
+                delay_ms
+                if stats["min_ms"] is None
+                else min(stats["min_ms"], delay_ms)
+            )
+            stats["max_ms"] = (
+                delay_ms
+                if stats["max_ms"] is None
+                else max(stats["max_ms"], delay_ms)
+            )
+
+        def print_metric(metric_name, stats):
+            if stats["count"] == 0:
+                return
+            average_ms = stats["total_ms"] / stats["count"]
+            print(
+                f"PIPELINE {metric_name} "
+                f"avg={average_ms:.1f} "
+                f"min={stats['min_ms']:.1f} "
+                f"max={stats['max_ms']:.1f} "
+                f"samples={stats['count']}",
+                flush=True,
+            )
+
+        def append_time(queue):
+            nonlocal pipeline_dropped
+            queue.append(monotonic_ns())
+            if len(queue) > 180:
+                queue.popleft()
+                pipeline_dropped += 1
 
         def overlay_probe(_pad, info):
             buffer = info.get_buffer()
             if buffer is None:
                 return Gst.PadProbeReturn.OK
-            overlay_frame_times.append(monotonic_ns())
-            if len(overlay_frame_times) > 180:
-                overlay_frame_times.popleft()
-                overlay_send_stats["dropped"] += 1
+            append_time(overlay_frame_times)
+            return Gst.PadProbeReturn.OK
+
+        def pre_encoder_probe(_pad, info):
+            buffer = info.get_buffer()
+            if buffer is None:
+                return Gst.PadProbeReturn.OK
+            now = monotonic_ns()
+            if overlay_frame_times:
+                started_at = overlay_frame_times.popleft()
+                record_stat("overlay_to_encoder_ms", (now - started_at) / 1_000_000.0)
+            append_time(pre_encoder_times)
+            return Gst.PadProbeReturn.OK
+
+        def post_encoder_probe(_pad, info):
+            buffer = info.get_buffer()
+            if buffer is None:
+                return Gst.PadProbeReturn.OK
+            now = monotonic_ns()
+            if pre_encoder_times:
+                started_at = pre_encoder_times.popleft()
+                record_stat("encoder_ms", (now - started_at) / 1_000_000.0)
+            append_time(post_encoder_times)
+            return Gst.PadProbeReturn.OK
+
+        def post_parse_probe(_pad, info):
+            buffer = info.get_buffer()
+            if buffer is None:
+                return Gst.PadProbeReturn.OK
+            now = monotonic_ns()
+            if post_encoder_times:
+                started_at = post_encoder_times.popleft()
+                record_stat("parse_ms", (now - started_at) / 1_000_000.0)
+            append_time(post_parse_times)
             return Gst.PadProbeReturn.OK
 
         def send_probe(_pad, info):
             buffer = info.get_buffer()
             if buffer is None:
                 return Gst.PadProbeReturn.OK
-            if not overlay_frame_times:
-                return Gst.PadProbeReturn.OK
 
-            started_at = overlay_frame_times.popleft()
-            delay_ms = (monotonic_ns() - started_at) / 1_000_000.0
+            now = monotonic_ns()
+            encoded_to_send_ms = None
+            if post_parse_times:
+                started_at = post_parse_times.popleft()
+                encoded_to_send_ms = (now - started_at) / 1_000_000.0
+                record_stat("encoded_to_send_ms", encoded_to_send_ms)
+
             frame_marker = (
                 renderer.frame_markers.popleft() if renderer.frame_markers else None
             )
-            overlay_send_stats["count"] += 1
-            overlay_send_stats["total_ms"] += delay_ms
-            overlay_send_stats["min_ms"] = (
-                delay_ms
-                if overlay_send_stats["min_ms"] is None
-                else min(overlay_send_stats["min_ms"], delay_ms)
-            )
-            overlay_send_stats["max_ms"] = (
-                delay_ms
-                if overlay_send_stats["max_ms"] is None
-                else max(overlay_send_stats["max_ms"], delay_ms)
-            )
+            overlay_to_send_ms = None
+            if frame_marker is not None:
+                overlay_done_at = frame_marker.get("overlay_done_monotonic_ns")
+                if overlay_done_at is not None:
+                    overlay_to_send_ms = (now - overlay_done_at) / 1_000_000.0
+                else:
+                    overlay_to_send_ms = None
+            if overlay_to_send_ms is not None:
+                record_stat("overlay_to_send_ms", overlay_to_send_ms)
 
             if (
                 frame_marker is not None
-                and overlay_send_stats["count"] % max(sender_frame_log_interval, 1) == 0
+                and overlay_to_send_ms is not None
+                and metric_stats["overlay_to_send_ms"]["count"] % max(sender_frame_log_interval, 1) == 0
             ):
                 sender_now_ms = wallclock_ms()
                 sender_pipeline_ms = sender_now_ms - frame_marker["timestamp_ms_full"]
@@ -475,37 +557,60 @@ def main():
                     f"seq={frame_marker['frame_seq']} "
                     f"timestamp_ms={frame_marker['timestamp_ms_full']} "
                     f"render_ms={frame_marker['render_ms']:.1f} "
-                    f"overlay_to_send_ms={delay_ms:.1f} "
+                    f"overlay_to_send_ms={overlay_to_send_ms:.1f} "
+                    f"encoded_to_send_ms={(encoded_to_send_ms if encoded_to_send_ms is not None else -1):.1f} "
                     f"sender_pipeline_ms={sender_pipeline_ms} "
                     f"sender_now_ms={sender_now_ms}",
                     flush=True,
                 )
 
-            if overlay_send_stats["count"] % metrics_interval_frames == 0:
-                average_ms = (
-                    overlay_send_stats["total_ms"] / overlay_send_stats["count"]
-                )
+            if metric_stats["overlay_to_send_ms"]["count"] % metrics_interval_frames == 0:
+                for metric_name, stats in metric_stats.items():
+                    print_metric(metric_name, stats)
                 print(
-                    "PIPELINE overlay_to_send_ms "
-                    f"avg={average_ms:.1f} "
-                    f"min={overlay_send_stats['min_ms']:.1f} "
-                    f"max={overlay_send_stats['max_ms']:.1f} "
-                    f"samples={overlay_send_stats['count']} "
-                    f"dropped_pts={overlay_send_stats['dropped']}",
+                    "PIPELINE dropped_pts "
+                    f"value={pipeline_dropped}",
                     flush=True,
                 )
             return Gst.PadProbeReturn.OK
 
         overlay_src_pad = overlay.get_static_pad("src")
+        pre_encoder_element = pipeline.get_by_name("pre_encoder_probe")
+        post_encoder_element = pipeline.get_by_name("post_encoder_probe")
+        post_parse_element = pipeline.get_by_name("post_parse_probe")
         send_probe_element = pipeline.get_by_name("send_probe")
+        pre_encoder_src_pad = (
+            pre_encoder_element.get_static_pad("src")
+            if pre_encoder_element is not None
+            else None
+        )
+        post_encoder_src_pad = (
+            post_encoder_element.get_static_pad("src")
+            if post_encoder_element is not None
+            else None
+        )
+        post_parse_src_pad = (
+            post_parse_element.get_static_pad("src")
+            if post_parse_element is not None
+            else None
+        )
         send_src_pad = (
             send_probe_element.get_static_pad("src")
             if send_probe_element is not None
             else None
         )
 
-        if overlay_src_pad is not None and send_src_pad is not None:
+        if (
+            overlay_src_pad is not None
+            and pre_encoder_src_pad is not None
+            and post_encoder_src_pad is not None
+            and post_parse_src_pad is not None
+            and send_src_pad is not None
+        ):
             overlay_src_pad.add_probe(Gst.PadProbeType.BUFFER, overlay_probe)
+            pre_encoder_src_pad.add_probe(Gst.PadProbeType.BUFFER, pre_encoder_probe)
+            post_encoder_src_pad.add_probe(Gst.PadProbeType.BUFFER, post_encoder_probe)
+            post_parse_src_pad.add_probe(Gst.PadProbeType.BUFFER, post_parse_probe)
             send_src_pad.add_probe(Gst.PadProbeType.BUFFER, send_probe)
         else:
             print("PIPELINE metrics disabled: probe pads not found", flush=True)

@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 2s
+  evaluation_interval: 2s
+
+scrape_configs:
+  - job_name: mediamtx
+    metrics_path: /metrics
+    scheme: http
+    basic_auth:
+      username: metrics
+      password: metrics123
+    static_configs:
+      - targets:
+          - mediamtx:9998
+
+  - job_name: tunnel-exporter
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - monitor:9010

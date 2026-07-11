@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tunnel Monitor</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0d10;
+        --panel: #151922;
+        --line: #262c38;
+        --text: #e8edf5;
+        --muted: #8e98a8;
+        --ok: #35d07f;
+        --warn: #f3bd42;
+        --bad: #ff6b6b;
+        --blue: #5aa7ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 12px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      header {
+        height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+        background: #10141b;
+      }
+      h1 { margin: 0; font-size: 13px; font-weight: 650; }
+      .badge {
+        border: 1px solid var(--line);
+        color: var(--muted);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+      }
+      main { padding: 12px; display: grid; gap: 10px; }
+      .top {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        min-width: 0;
+      }
+      .card-head {
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      .card-title { font-weight: 650; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        padding: 10px;
+      }
+      .metric {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 7px;
+        background: #10141b;
+      }
+      .label {
+        color: var(--muted);
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+      .value {
+        margin-top: 3px;
+        font-size: 16px;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .ok { color: var(--ok); }
+      .warn { color: var(--warn); }
+      .bad { color: var(--bad); }
+      .blue { color: var(--blue); }
+      .streams {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        white-space: nowrap;
+      }
+      th { color: var(--muted); font-weight: 500; }
+      .chart {
+        height: 72px;
+        width: 100%;
+        display: block;
+      }
+      .alerts, .errors {
+        padding: 8px 10px;
+        display: grid;
+        gap: 5px;
+      }
+      .line { color: var(--muted); }
+      @media (max-width: 1100px) {
+        .top, .streams { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Tunnel Monitor</h1>
+      <span class="badge">MediaMTX / Viewer / Publisher</span>
+      <span class="badge" id="updated">--</span>
+    </header>
+    <main>
+      <section class="top">
+        <div class="card">
+          <div class="card-head"><span class="card-title">MediaMTX</span><span id="mtx-state" class="badge">--</span></div>
+          <div class="grid">
+            <div class="metric"><div class="label">Ready</div><div id="mtx-ready" class="value">--</div></div>
+            <div class="metric"><div class="label">Paths</div><div id="mtx-paths" class="value">--</div></div>
+            <div class="metric"><div class="label">Readers</div><div id="mtx-readers" class="value">--</div></div>
+            <div class="metric"><div class="label">Errors</div><div id="mtx-errors" class="value">--</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-title">Viewer</span><span class="badge">ORTM</span></div>
+          <div class="grid">
+            <div class="metric"><div class="label">Playing</div><div id="viewer-playing" class="value">--</div></div>
+            <div class="metric"><div class="label">ORTM p50</div><div id="viewer-ortm" class="value">--</div></div>
+            <div class="metric"><div class="label">Upstream p50</div><div id="viewer-upstream" class="value">--</div></div>
+            <div class="metric"><div class="label">Browser p50</div><div id="viewer-browser" class="value">--</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-title">Publisher</span><span id="docker-state" class="badge">--</span></div>
+          <div class="grid">
+            <div class="metric"><div class="label">Streams</div><div id="pub-streams" class="value">--</div></div>
+            <div class="metric"><div class="label">Overlay</div><div id="pub-overlay" class="value">--</div></div>
+            <div class="metric"><div class="label">Render</div><div id="pub-render" class="value">--</div></div>
+            <div class="metric"><div class="label">Alerts</div><div id="alert-count" class="value">--</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-title">Recent Alerts</span></div>
+          <div id="alerts" class="alerts"></div>
+        </div>
+      </section>
+
+      <section class="streams" id="streams"></section>
+
+      <section class="card">
+        <div class="card-head"><span class="card-title">Collector Errors</span></div>
+        <div class="errors" id="errors"></div>
+      </section>
+    </main>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const fmt = (value, suffix = '') => Number.isFinite(Number(value)) ? `${Math.round(Number(value))}${suffix}` : '--';
+      const avg = (values) => {
+        const nums = values.map(Number).filter(Number.isFinite);
+        if (!nums.length) return null;
+        nums.sort((a, b) => a - b);
+        return nums[Math.floor(nums.length / 2)];
+      };
+      function classForMs(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return '';
+        if (n > 300) return 'bad';
+        if (n > 120) return 'warn';
+        return 'ok';
+      }
+      function drawChart(canvas, history, key) {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+        canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        const values = history.map((item) => Number(item[key])).filter(Number.isFinite).slice(-120);
+        if (values.length < 2) return;
+        const max = Math.max(50, ...values);
+        const min = Math.min(0, ...values);
+        ctx.strokeStyle = '#262c38';
+        ctx.lineWidth = 1;
+        for (let i = 1; i < 4; i += 1) {
+          const y = (rect.height / 4) * i;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(rect.width, y);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = '#5aa7ff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        values.forEach((value, index) => {
+          const x = values.length === 1 ? 0 : (index / (values.length - 1)) * rect.width;
+          const y = rect.height - ((value - min) / Math.max(1, max - min)) * rect.height;
+          if (index === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+      function renderStream(stream, item, history) {
+        const id = `chart-${stream}`;
+        const viewer = item.viewer || {};
+        const publisher = item.publisher || {};
+        return `
+          <div class="card">
+            <div class="card-head">
+              <span class="card-title">${stream}</span>
+              <span class="badge ${item.ready ? 'ok' : 'bad'}">${item.ready ? 'ready' : 'offline'}</span>
+            </div>
+            <table>
+              <tbody>
+                <tr><th>ORTM</th><td class="${classForMs(viewer.ortm)}">${fmt(viewer.ortm, ' ms')}</td><th>Upstream</th><td class="${classForMs(viewer.upstream)}">${fmt(viewer.upstream, ' ms')}</td></tr>
+                <tr><th>Fallback</th><td>${fmt(viewer.fallback, ' ms')}</td><th>Browser</th><td>${fmt(viewer.browser, ' ms')}</td></tr>
+                <tr><th>ICE</th><td>${viewer.ice || '--'}</td><th>Status</th><td>${viewer.status || '--'}</td></tr>
+                <tr><th>Readers</th><td>${item.readers || 0}</td><th>Lost</th><td>${item.rtpPacketsLost || 0}</td></tr>
+                <tr><th>Overlay</th><td>${fmt(publisher.overlayToSendMs, ' ms')}</td><th>Render</th><td>${fmt(publisher.renderAvgMs, ' ms')}</td></tr>
+              </tbody>
+            </table>
+            <canvas class="chart" id="${id}"></canvas>
+          </div>
+        `;
+      }
+      async function refresh() {
+        const res = await fetch('/api/snapshot', { cache: 'no-store' });
+        const data = await res.json();
+        $('updated').textContent = data.updatedAt || '--';
+        $('mtx-state').textContent = data.mediamtx.apiOk && data.mediamtx.metricsOk ? 'ok' : 'degraded';
+        $('mtx-state').className = `badge ${data.mediamtx.apiOk && data.mediamtx.metricsOk ? 'ok' : 'warn'}`;
+        const streams = Object.values(data.derived.streams || {});
+        $('mtx-ready').textContent = streams.filter((item) => item.ready).length;
+        $('mtx-paths').textContent = Object.keys(data.mediamtx.paths || {}).length;
+        $('mtx-readers').textContent = streams.reduce((sum, item) => sum + Number(item.readers || 0), 0);
+        $('mtx-errors').textContent = streams.reduce((sum, item) => sum + Number(item.rtpPacketsLost || 0) + Number(item.outboundFramesDiscarded || 0) + Number(item.inboundFramesInError || 0), 0);
+        const latest = Object.values(data.viewer.latestBySlot || {});
+        $('viewer-playing').textContent = latest.filter((item) => item.status === 'playing').length;
+        $('viewer-ortm').textContent = fmt(avg(latest.map((item) => item.ortm)), ' ms');
+        $('viewer-upstream').textContent = fmt(avg(latest.map((item) => item.upstream)), ' ms');
+        $('viewer-browser').textContent = fmt(avg(latest.map((item) => item.browser)), ' ms');
+        $('docker-state').textContent = data.publisher.dockerSocketAvailable ? 'docker logs' : 'no socket';
+        $('docker-state').className = `badge ${data.publisher.dockerSocketAvailable ? 'ok' : 'warn'}`;
+        const pub = Object.values(data.publisher.latestByStream || {});
+        $('pub-streams').textContent = pub.length;
+        $('pub-overlay').textContent = fmt(avg(pub.map((item) => item.overlayToSendMs || item.overlayToSendAvgMs)), ' ms');
+        $('pub-render').textContent = fmt(avg(pub.map((item) => item.renderAvgMs)), ' ms');
+        $('alert-count').textContent = (data.derived.alerts || []).length;
+        $('alerts').innerHTML = (data.derived.alerts || []).slice(-6).map((alert) => (
+          `<div class="line ${alert.level === 'warn' ? 'warn' : ''}">${alert.stream || 'system'}: ${alert.message}</div>`
+        )).join('') || '<div class="line">No alerts</div>';
+        $('errors').innerHTML = (data.errors || []).slice(-8).reverse().map((error) => (
+          `<div class="line">${error.ts} ${error.source}: ${error.error}</div>`
+        )).join('') || '<div class="line">No collector errors</div>';
+        $('streams').innerHTML = Object.entries(data.derived.streams || {}).map(([stream, item]) => (
+          renderStream(stream, item, data.viewer.historyBySlot?.[item.slot] || [])
+        )).join('');
+        for (const [stream, item] of Object.entries(data.derived.streams || {})) {
+          const canvas = document.getElementById(`chart-${stream}`);
+          if (canvas) drawChart(canvas, data.viewer.historyBySlot?.[item.slot] || [], 'ortm');
+        }
+      }
+      refresh().catch(console.error);
+      setInterval(() => refresh().catch(console.error), 2000);
+    </script>
+  </body>
+</html>
