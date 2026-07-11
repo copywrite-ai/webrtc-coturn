@@ -52,6 +52,12 @@ services:
       ORTM_CELL: "${ORTM_CELL:-12}"
       ORTM_PADDING: "${ORTM_PADDING:-12}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
+      X264_THREADS: "${X264_THREADS:-}"
+      X264_SLICED_THREADS: "${X264_SLICED_THREADS:-}"
+      X264_VBV_BUF_CAPACITY_MS: "${X264_VBV_BUF_CAPACITY_MS:-}"
+      WHIP_CC_MIN_BITRATE_BPS: "${WHIP_CC_MIN_BITRATE_BPS:-}"
+      WHIP_CC_MAX_BITRATE_BPS: "${WHIP_CC_MAX_BITRATE_BPS:-}"
+      WHIP_MITIGATION_MODES: "${WHIP_MITIGATION_MODES:-none}"
     restart: unless-stopped
 
   fish_back_whip:

@@ -43,6 +43,19 @@ def env_float(name, default):
     return float(env_value(name, str(default)))
 
 
+def env_optional_value(name):
+    value = os.environ.get(name)
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def env_optional_int(name):
+    value = env_optional_value(name)
+    return int(value) if value is not None else None
+
+
 def gst_quote(value):
     escaped = value.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
@@ -337,8 +350,26 @@ def build_pipeline_description(
     speed_preset,
     key_int_max,
     x264_option_string,
+    x264_threads,
+    x264_sliced_threads,
+    x264_vbv_buf_capacity_ms,
     sink_args,
 ):
+    encoder_args = [
+        f"bitrate={bitrate_kbps}",
+        f"speed-preset={gst_quote(speed_preset)}",
+        "tune=zerolatency",
+        f"key-int-max={key_int_max}",
+        "bframes=0",
+        f"option-string={gst_quote(x264_option_string)}",
+    ]
+    if x264_threads is not None:
+        encoder_args.append(f"threads={x264_threads}")
+    if x264_sliced_threads is not None:
+        encoder_args.append(f"sliced-threads={'true' if x264_sliced_threads else 'false'}")
+    if x264_vbv_buf_capacity_ms is not None:
+        encoder_args.append(f"vbv-buf-capacity={x264_vbv_buf_capacity_ms}")
+
     return (
         f"videotestsrc is-live=true pattern={gst_quote(pattern)} "
         f"! video/x-raw,width={width},height={height},framerate={fps}/1,format=BGRx "
@@ -346,9 +377,7 @@ def build_pipeline_description(
         "! videoconvert "
         "! video/x-raw,format=I420 "
         "! identity name=pre_encoder_probe silent=true "
-        f"! x264enc name=encoder bitrate={bitrate_kbps} speed-preset={gst_quote(speed_preset)} "
-        f"tune=zerolatency key-int-max={key_int_max} bframes=0 "
-        f"option-string={gst_quote(x264_option_string)} "
+        f"! x264enc name=encoder {' '.join(encoder_args)} "
         "! identity name=post_encoder_probe silent=true "
         "! video/x-h264,profile=baseline "
         "! h264parse name=h264parse0 config-interval=-1 "
@@ -381,10 +410,16 @@ def main():
     x264_option_string = env_value(
         "X264_OPTION_STRING", "nal-hrd=cbr:force-cfr=1:filler=1"
     )
+    x264_threads = env_optional_int("X264_THREADS")
+    x264_sliced_threads = env_optional_int("X264_SLICED_THREADS")
+    x264_vbv_buf_capacity_ms = env_optional_int("X264_VBV_BUF_CAPACITY_MS")
     whip_stun_server = env_value("WHIP_STUN_SERVER", "")
     whip_turn_server = env_value("WHIP_TURN_SERVER", "")
     whip_turn_server_2 = env_value("WHIP_TURN_SERVER_2", "")
     whip_force_turn = env_value("WHIP_FORCE_TURN", "0")
+    whip_cc_min_bitrate_bps = env_optional_int("WHIP_CC_MIN_BITRATE_BPS")
+    whip_cc_max_bitrate_bps = env_optional_int("WHIP_CC_MAX_BITRATE_BPS")
+    whip_mitigation_modes = env_optional_value("WHIP_MITIGATION_MODES")
     whip_sink_extra_args = env_value("WHIP_SINK_EXTRA_ARGS", "")
     timestamp_overlay = env_value("TIMESTAMP_OVERLAY", "0")
     timestamp_tz_name = env_value("TIMESTAMP_TZ", "Asia/Shanghai")
@@ -416,6 +451,12 @@ def main():
             sink_args.append(f'turn-servers=<"{whip_turn_server}">')
     if whip_force_turn == "1":
         sink_args.append("ice-transport-policy=relay")
+    if whip_cc_min_bitrate_bps is not None:
+        sink_args.append(f"min-bitrate={whip_cc_min_bitrate_bps}")
+    if whip_cc_max_bitrate_bps is not None:
+        sink_args.append(f"max-bitrate={whip_cc_max_bitrate_bps}")
+    if whip_mitigation_modes is not None:
+        sink_args.append(f"enable-mitigation-modes={gst_quote(whip_mitigation_modes)}")
     if whip_sink_extra_args:
         sink_args.append(whip_sink_extra_args)
 
@@ -439,6 +480,20 @@ def main():
     print(f"  pattern      : {pattern}", flush=True)
     print(f"  x264 preset  : {speed_preset}", flush=True)
     print(f"  x264 options : {x264_option_string}", flush=True)
+    print(
+        f"  x264 threads : {x264_threads if x264_threads is not None else '<default>'}",
+        flush=True,
+    )
+    print(
+        "  x264 sliced  : "
+        f"{x264_sliced_threads if x264_sliced_threads is not None else '<default>'}",
+        flush=True,
+    )
+    print(
+        "  x264 vbv ms  : "
+        f"{x264_vbv_buf_capacity_ms if x264_vbv_buf_capacity_ms is not None else '<default>'}",
+        flush=True,
+    )
     print(f"  gst debug    : {gst_debug_level}", flush=True)
     print(f"  ortm version : {ORTM_VERSION}", flush=True)
     print(
@@ -458,6 +513,18 @@ def main():
     print(f"  turn server  : {'<configured>' if whip_turn_server else '<none>'}", flush=True)
     print(f"  turn server 2: {'<configured>' if whip_turn_server_2 else '<none>'}", flush=True)
     print(f"  force turn   : {whip_force_turn}", flush=True)
+    print(
+        f"  cc min bps   : {whip_cc_min_bitrate_bps if whip_cc_min_bitrate_bps is not None else '<default>'}",
+        flush=True,
+    )
+    print(
+        f"  cc max bps   : {whip_cc_max_bitrate_bps if whip_cc_max_bitrate_bps is not None else '<default>'}",
+        flush=True,
+    )
+    print(
+        f"  mitigation   : {whip_mitigation_modes if whip_mitigation_modes is not None else '<default>'}",
+        flush=True,
+    )
     print("", flush=True)
     print(f"  sink args    : {sink_args_log}", flush=True)
     print("", flush=True)
@@ -471,6 +538,9 @@ def main():
         speed_preset=speed_preset,
         key_int_max=key_int_max,
         x264_option_string=x264_option_string,
+        x264_threads=x264_threads,
+        x264_sliced_threads=x264_sliced_threads,
+        x264_vbv_buf_capacity_ms=x264_vbv_buf_capacity_ms,
         sink_args=sink_args,
     )
 

@@ -359,3 +359,74 @@ KEY_INT_MAX=120
 - `2.5Mbps` 是否就是当前最优平衡点
 - 是否存在更低码率但相同时延的点
 - 弱网下 ORTM / upstream / jitter 的稳定性边界
+
+## Tail latency 补充实验
+
+在确认当前推荐基线为：
+
+```text
+960x540 / 60fps / 2.5Mbps / key-int=120
+```
+
+之后，又补做了三组 `random weak-network` tail latency 对比。
+
+固定条件：
+
+```text
+page: http://127.0.0.1:9001/whep-quad-direct.html
+PROFILE_SEQUENCE=random:120
+RANDOM_STEP_SECONDS=5
+SAMPLE_SECONDS=120
+```
+
+### 对比场景
+
+1. `baseline`
+   - `key-int=120`
+2. `vbv100`
+   - `key-int=120`
+   - `x264 vbv-buf-capacity=100`
+3. `mitigation_none`
+   - `key-int=120`
+   - `whipclientsink enable-mitigation-modes=none`
+
+### 结果汇总
+
+| 场景 | ORTM avg/p50/p95/max | Upstream avg/p50/p95/max | Jitter avg | fps avg | ORTM>200ms | ORTM>300ms | 结论 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `baseline` | `229 / 264 / 357 / 520 ms` | `203 / 237 / 329 / 494 ms` | `64 ms` | `46.9` | `14` | `2` | tail 明显偏大 |
+| `vbv100` | `204 / 179 / 352 / 491 ms` | `179 / 157 / 321 / 463 ms` | `52 ms` | `55.3` | `7` | `6` | 平均值略好，但 tail 不稳 |
+| `mitigation_none` | `161 / 164 / 225 / 228 ms` | `131 / 134 / 195 / 198 ms` | `35 ms` | `55.0` | `3` | `0` | 三组里最稳 |
+
+### 补充结论
+
+1. `x264 vbv-buf-capacity=100ms` 没有形成稳定收益。
+   它改善了部分平均值，但 `ORTM>300ms` 次数反而更多，不适合作为当前默认方案。
+
+2. `enable-mitigation-modes=none` 是目前最有效的 tail latency 优化项。
+   它把：
+
+   - `ORTM p95` 从 `357ms` 降到 `225ms`
+   - `Upstream p95` 从 `329ms` 降到 `195ms`
+   - `ORTM max` 从 `520ms` 降到 `228ms`
+
+3. 这说明当前弱网下的大头更像是接收侧 / WebRTC mitigation 恢复过程，而不是发送端本地流水线。
+   发送端本地 pipeline 指标仍稳定在：
+
+```text
+overlay_to_send_ms: 1~2ms
+sender_pipeline_ms: 2~3ms
+```
+
+### 当前默认建议
+
+对 `fish_front` 的弱网实验链路，当前建议默认值更新为：
+
+```text
+WIDTH=960
+HEIGHT=540
+FPS=60
+BITRATE_KBPS=2500
+KEY_INT_MAX=120
+WHIP_MITIGATION_MODES=none
+```
