@@ -420,7 +420,7 @@
     </template>
 
     <script>
-      const BUILD_VERSION = '2026-07-09-whep-quad-direct-11';
+      const BUILD_VERSION = '2026-07-11-whep-quad-direct-rtcstats-1';
       const logEl = document.getElementById('log');
       const logPanelEl = document.getElementById('logPanel');
       const slotsEl = document.getElementById('slots');
@@ -788,6 +788,8 @@
             readbackMsTotal: 0,
             decodeMsTotal: 0,
           },
+          rtcStats: {},
+          previousInboundStats: null,
         };
         state.decodeCtx = state.decodeCanvas.getContext('2d', { willReadFrequently: true });
         state.chart = new window.RealtimeLatencyChart(chartCanvasEl, {
@@ -844,6 +846,14 @@
           const browserPerf = state.browserPerf.count
             ? `browser=${browserCostEl.textContent || '--'} draw=${(state.browserPerf.drawMsTotal / state.browserPerf.count).toFixed(1)}ms read=${(state.browserPerf.readbackMsTotal / state.browserPerf.count).toFixed(1)}ms decode=${(state.browserPerf.decodeMsTotal / state.browserPerf.count).toFixed(1)}ms`
             : 'browser=-- draw=-- read=-- decode=--';
+          const rtcStats = [
+            `rtcJitter=${formatMetricValue(state.rtcStats.jitterBufferMs, 'ms')}`,
+            `rtcDecode=${formatMetricValue(state.rtcStats.decodeMs, 'ms')}`,
+            `rtcFps=${formatMetricValue(state.rtcStats.framesPerSecond, '')}`,
+            `rtcDrop=${formatMetricValue(state.rtcStats.framesDropped, '')}`,
+            `rtcBitrate=${formatMetricValue(state.rtcStats.bitrateKbps, 'kbps')}`,
+            `rtcPacketsLost=${formatMetricValue(state.rtcStats.packetsLost, '')}`,
+          ].join(' ');
           const line = [
             `slot=${name}`,
             `ice=${iceEl.textContent || 'idle'}`,
@@ -855,6 +865,7 @@
             `upstreamNet=${upstreamNetLatencyEl.textContent || '--'}`,
             `decodeMode=${state.decodeMode || ORTM_DECODE_MODE}`,
             browserPerf,
+            rtcStats,
             `status=${statusEl.textContent || '--'}`,
           ].join(' ');
           if (line === state.lastMetricLogLine) {
@@ -894,6 +905,8 @@
             readbackMsTotal: 0,
             decodeMsTotal: 0,
           };
+          state.rtcStats = {};
+          state.previousInboundStats = null;
           ortmLatencyEl.textContent = '--';
           ortmNetLatencyEl.textContent = '--';
           upstreamLatencyEl.textContent = '--';
@@ -1139,6 +1152,7 @@
                   inbound = report;
                 }
               });
+              updateRtcStats(inbound);
               if (
                 state.ortmLastResult &&
                 performance.now() - state.ortmLastSuccessAt < 1500 &&
@@ -1175,6 +1189,71 @@
               emitMetricLog();
             }
           }, 1000);
+        }
+
+        function formatMetricValue(value, unit) {
+          if (!Number.isFinite(value)) return '--';
+          const digits = Math.abs(value) >= 100 ? 0 : 1;
+          return `${value.toFixed(digits)}${unit}`;
+        }
+
+        function numberOrNull(value) {
+          return Number.isFinite(value) ? value : null;
+        }
+
+        function updateRtcStats(inbound) {
+          if (!inbound) {
+            state.rtcStats = {};
+            state.previousInboundStats = null;
+            return;
+          }
+
+          const current = {
+            timestamp: numberOrNull(inbound.timestamp),
+            bytesReceived: numberOrNull(inbound.bytesReceived),
+            jitterBufferDelay: numberOrNull(inbound.jitterBufferDelay),
+            jitterBufferEmittedCount: numberOrNull(inbound.jitterBufferEmittedCount),
+            totalDecodeTime: numberOrNull(inbound.totalDecodeTime),
+            framesDecoded: numberOrNull(inbound.framesDecoded),
+          };
+          const previous = state.previousInboundStats;
+          const rtcStats = {
+            framesPerSecond: numberOrNull(inbound.framesPerSecond),
+            framesDropped: numberOrNull(inbound.framesDropped),
+            packetsLost: numberOrNull(inbound.packetsLost),
+          };
+
+          if (previous && current.timestamp != null && previous.timestamp != null) {
+            const elapsedSeconds = (current.timestamp - previous.timestamp) / 1000;
+            if (elapsedSeconds > 0 && current.bytesReceived != null && previous.bytesReceived != null) {
+              rtcStats.bitrateKbps = ((current.bytesReceived - previous.bytesReceived) * 8) / elapsedSeconds / 1000;
+            }
+            if (
+              current.jitterBufferDelay != null &&
+              previous.jitterBufferDelay != null &&
+              current.jitterBufferEmittedCount != null &&
+              previous.jitterBufferEmittedCount != null
+            ) {
+              const emittedDelta = current.jitterBufferEmittedCount - previous.jitterBufferEmittedCount;
+              if (emittedDelta > 0) {
+                rtcStats.jitterBufferMs = ((current.jitterBufferDelay - previous.jitterBufferDelay) / emittedDelta) * 1000;
+              }
+            }
+            if (
+              current.totalDecodeTime != null &&
+              previous.totalDecodeTime != null &&
+              current.framesDecoded != null &&
+              previous.framesDecoded != null
+            ) {
+              const decodedDelta = current.framesDecoded - previous.framesDecoded;
+              if (decodedDelta > 0) {
+                rtcStats.decodeMs = ((current.totalDecodeTime - previous.totalDecodeTime) / decodedDelta) * 1000;
+              }
+            }
+          }
+
+          state.previousInboundStats = current;
+          state.rtcStats = rtcStats;
         }
 
         startBtn.addEventListener('click', async () => {

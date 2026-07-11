@@ -16,7 +16,6 @@ const PUBLISHER_CONTAINERS = splitCsv(process.env.PUBLISHER_CONTAINERS || [
   'tunnel-fish_back_whip-1',
   'tunnel-fish_left_whip-1',
   'tunnel-fish_right_whip-1',
-  'tunnel-fish_front_remote_whip-1',
 ].join(','));
 const STREAMS = splitCsv(process.env.MONITOR_STREAMS || 'fish_front,fish_back,fish_left,fish_right');
 const POLL_MS = Number(process.env.MONITOR_POLL_MS || 2000);
@@ -219,7 +218,7 @@ function parseKeyValueMessage(message) {
     const key = match[1];
     const rawValue = match[2];
     const normalized = rawValue === '--' ? null : rawValue;
-    const numeric = normalized == null ? null : Number(String(normalized).replace(/ms$/, ''));
+    const numeric = normalized == null ? null : Number(String(normalized).replace(/(?:ms|kbps)$/, ''));
     data[key] = Number.isFinite(numeric) ? numeric : normalized;
   }
   return data;
@@ -405,6 +404,9 @@ async function collectPublisherLogs() {
         };
       }
     } catch (error) {
+      if (String(error?.message || '').includes(' returned 404')) {
+        continue;
+      }
       pushError(`publisher-log:${container}`, error);
     }
   }
@@ -492,6 +494,24 @@ function prometheusSnapshot() {
     }
     if (isMetricNumber(item.viewer.browser)) {
       lines.push(`tunnel_viewer_browser_cost_ms{${label}} ${Number(item.viewer.browser)}`);
+    }
+    if (isMetricNumber(item.viewer.rtcJitter)) {
+      lines.push(`tunnel_viewer_rtc_jitter_buffer_ms{${label}} ${Number(item.viewer.rtcJitter)}`);
+    }
+    if (isMetricNumber(item.viewer.rtcDecode)) {
+      lines.push(`tunnel_viewer_rtc_decode_ms{${label}} ${Number(item.viewer.rtcDecode)}`);
+    }
+    if (isMetricNumber(item.viewer.rtcFps)) {
+      lines.push(`tunnel_viewer_rtc_fps{${label}} ${Number(item.viewer.rtcFps)}`);
+    }
+    if (isMetricNumber(item.viewer.rtcDrop)) {
+      lines.push(`tunnel_viewer_rtc_frames_dropped{${label}} ${Number(item.viewer.rtcDrop)}`);
+    }
+    if (isMetricNumber(item.viewer.rtcBitrate)) {
+      lines.push(`tunnel_viewer_rtc_bitrate_kbps{${label}} ${Number(item.viewer.rtcBitrate)}`);
+    }
+    if (isMetricNumber(item.viewer.rtcPacketsLost)) {
+      lines.push(`tunnel_viewer_rtc_packets_lost{${label}} ${Number(item.viewer.rtcPacketsLost)}`);
     }
     if (isMetricNumber(item.publisher.overlayToSendMs)) {
       lines.push(`tunnel_publisher_overlay_to_send_ms{${label}} ${Number(item.publisher.overlayToSendMs)}`);
