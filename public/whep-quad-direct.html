@@ -351,7 +351,7 @@
               <h1>四路直连播放</h1>
               <span class="badge" id="buildBadge">Build --</span>
             </div>
-            <p class="subtle">只做 WHEP 直连，首屏同时观察四路视频、ORTM 和趋势。</p>
+            <p class="subtle">只做 WHEP 直连，首屏同时观察四路视频、近似 G2G 和趋势。</p>
           </div>
           <div class="toolbar-spacer"></div>
           <div class="actions">
@@ -402,10 +402,10 @@
                   <span class="metric-sub">分辨率 <strong class="resolution">--</strong></span>
                 </div>
                 <div class="metric">
-                  <span class="metric-label">ORTM</span>
+                  <span class="metric-label">近似G2G</span>
                   <strong class="metric-value latency-ortm">--</strong>
                   <span class="metric-sub">
-                    净ORTM
+                    净G2G
                     <strong class="latency-ortm-net">--</strong>
                     样本年龄
                     <strong class="ortm-sample-age">--</strong>
@@ -437,7 +437,7 @@
     </template>
 
     <script>
-      const BUILD_VERSION = '2026-07-11-whep-quad-direct-rtcstats-10';
+      const BUILD_VERSION = '2026-07-12-whep-quad-direct-ortm-throttle-1';
       const logEl = document.getElementById('log');
       const logPanelEl = document.getElementById('logPanel');
       const slotsEl = document.getElementById('slots');
@@ -466,8 +466,9 @@
         offsets: [0, -4, 4],
       };
       const ORTM_PAYLOAD_BITS = 4 + 16 + 32 + 16;
+      const ORTM_SUPPORTED_VERSION = 0;
       const ORTM_MAX_REASONABLE_LATENCY_MS = 5000;
-      const ORTM_DECODE_INTERVAL_MS = 500;
+      const ORTM_DECODE_INTERVAL_MS = 200;
       const ORTM_DECODE_MODE = 'rvfc';
       const ORTM_STALL_CHART_INTERVAL_MS = 250;
       const ORTM_STALL_CHART_THRESHOLD_MS = 250;
@@ -563,7 +564,22 @@
 
       const ORTM_CANDIDATES = buildOrtmCandidates();
 
-      function ortmSampleCellLuma(imageData, frameWidth, frameHeight, candidate, row, col) {
+      function buildOrtmReadRoi() {
+        const minX = Math.floor(Math.min(...ORTM_CANDIDATES.map((candidate) => candidate.x)));
+        const minY = Math.floor(Math.min(...ORTM_CANDIDATES.map((candidate) => candidate.y)));
+        const maxX = Math.ceil(Math.max(...ORTM_CANDIDATES.map((candidate) => candidate.x + candidate.boxSize)));
+        const maxY = Math.ceil(Math.max(...ORTM_CANDIDATES.map((candidate) => candidate.y + candidate.boxSize)));
+        return {
+          x: Math.max(0, minX),
+          y: Math.max(0, minY),
+          width: Math.max(1, maxX - Math.max(0, minX)),
+          height: Math.max(1, maxY - Math.max(0, minY)),
+        };
+      }
+
+      const ORTM_READ_ROI = buildOrtmReadRoi();
+
+      function ortmSampleCellLuma(imageData, candidate, row, col, roiX = 0, roiY = 0) {
         const positions = [0.2, 0.5, 0.8];
         const originX = candidate.x + candidate.padding + col * candidate.cell;
         const originY = candidate.y + candidate.padding + row * candidate.cell;
@@ -571,12 +587,12 @@
         let count = 0;
         for (const px of positions) {
           for (const py of positions) {
-            const x = Math.round(originX + candidate.cell * px);
-            const y = Math.round(originY + candidate.cell * py);
-            if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) {
+            const x = Math.round(originX + candidate.cell * px) - roiX;
+            const y = Math.round(originY + candidate.cell * py) - roiY;
+            if (x < 0 || x >= imageData.width || y < 0 || y >= imageData.height) {
               continue;
             }
-            const offset = (y * frameWidth + x) * 4;
+            const offset = (y * imageData.width + x) * 4;
             const r = imageData.data[offset];
             const g = imageData.data[offset + 1];
             const b = imageData.data[offset + 2];
@@ -587,7 +603,7 @@
         return count ? total / count : NaN;
       }
 
-      function decodeOrtmFromImageData(imageData, frameWidth, frameHeight, nowMs) {
+      function decodeOrtmFromImageData(imageData, frameWidth, frameHeight, nowMs, roiX = 0, roiY = 0) {
         let bestFailure = null;
 
         for (const candidate of ORTM_CANDIDATES) {
@@ -607,7 +623,7 @@
 
           for (let row = 0; row < ORTM_CONFIG.gridSize && !invalid; row += 1) {
             for (let col = 0; col < ORTM_CONFIG.gridSize; col += 1) {
-              const luma = ortmSampleCellLuma(imageData, frameWidth, frameHeight, candidate, row, col);
+              const luma = ortmSampleCellLuma(imageData, candidate, row, col, roiX, roiY);
               if (!Number.isFinite(luma)) {
                 invalid = true;
                 break;
@@ -699,6 +715,14 @@
             (timestampMs >>> 8) & 0xff,
             timestampMs & 0xff,
           ]));
+
+          if (version !== ORTM_SUPPORTED_VERSION) {
+            const failure = { ...failureBase, reason: 'unsupported-version' };
+            if (!bestFailure || failure.score < bestFailure.score) {
+              bestFailure = failure;
+            }
+            continue;
+          }
 
           if (crc16 !== expectedCrc16) {
             const failure = { ...failureBase, reason: 'crc-mismatch' };
@@ -1053,14 +1077,21 @@
           }
           const width = videoEl.videoWidth;
           const height = videoEl.videoHeight;
-          if (state.decodeCanvas.width !== width) state.decodeCanvas.width = width;
-          if (state.decodeCanvas.height !== height) state.decodeCanvas.height = height;
+          const roiX = ORTM_READ_ROI.x;
+          const roiY = ORTM_READ_ROI.y;
+          const roiWidth = Math.min(ORTM_READ_ROI.width, Math.max(0, width - roiX));
+          const roiHeight = Math.min(ORTM_READ_ROI.height, Math.max(0, height - roiY));
+          if (roiWidth <= 0 || roiHeight <= 0) {
+            return;
+          }
+          if (state.decodeCanvas.width !== roiWidth) state.decodeCanvas.width = roiWidth;
+          if (state.decodeCanvas.height !== roiHeight) state.decodeCanvas.height = roiHeight;
           const drawStartedAt = performance.now();
-          state.decodeCtx.drawImage(videoEl, 0, 0, width, height);
+          state.decodeCtx.drawImage(videoEl, roiX, roiY, roiWidth, roiHeight, 0, 0, roiWidth, roiHeight);
           const drawFinishedAt = performance.now();
-          const imageData = state.decodeCtx.getImageData(0, 0, width, height);
+          const imageData = state.decodeCtx.getImageData(0, 0, roiWidth, roiHeight);
           const readbackFinishedAt = performance.now();
-          const result = decodeOrtmFromImageData(imageData, width, height, Date.now());
+          const result = decodeOrtmFromImageData(imageData, width, height, Date.now(), roiX, roiY);
           const decodeFinishedAt = performance.now();
           const drawMs = drawFinishedAt - drawStartedAt;
           const readbackMs = readbackFinishedAt - drawFinishedAt;
@@ -1156,13 +1187,15 @@
                 state.rvfcStats.presentedDelta = null;
                 state.rvfcStats.presentedFrames = null;
               }
-              try {
-                updateLatencyFromOrtm();
-              } catch (error) {
-                const reason = `decode-error:${error.message}`;
-                if (state.ortmLastFailureReason !== reason) {
-                  state.ortmLastFailureReason = reason;
-                  log(`${name} ORTM decode error: ${error.message}`);
+              if (callbackNow - state.ortmLastAttemptAt >= ORTM_DECODE_INTERVAL_MS) {
+                try {
+                  updateLatencyFromOrtm();
+                } catch (error) {
+                  const reason = `decode-error:${error.message}`;
+                  if (state.ortmLastFailureReason !== reason) {
+                    state.ortmLastFailureReason = reason;
+                    log(`${name} ORTM decode error: ${error.message}`);
+                  }
                 }
               }
               if (state.pc && videoEl.srcObject) {

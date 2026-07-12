@@ -251,13 +251,49 @@ class ORTMOverlayRenderer:
         self.timezone = timezone
         self.draw_timestamp_text = draw_timestamp_text
         self.render_stats = StatsWindow()
-        self.frame_markers = deque()
+        self.frame_markers_by_pts = {}
+        self.frame_marker_order = deque()
+        self.marker_duplicate_pts = 0
+        self.marker_expired_pts = 0
 
     @property
     def marker_size(self):
         return GRID_SIZE * self.cell + self.padding * 2
 
-    def draw(self, _overlay, context, _timestamp, _duration):
+    def _remember_frame_marker(self, pts_ns, marker):
+        if pts_ns is None:
+            return
+        if pts_ns in self.frame_markers_by_pts:
+            self.marker_duplicate_pts += 1
+        self.frame_markers_by_pts[pts_ns] = marker
+        self.frame_marker_order.append(pts_ns)
+        while len(self.frame_marker_order) > 300:
+            old_pts = self.frame_marker_order.popleft()
+            if self.frame_markers_by_pts.pop(old_pts, None) is not None:
+                self.marker_expired_pts += 1
+
+    def take_frame_marker(self, pts_ns):
+        if pts_ns is None:
+            return None
+        return self.frame_markers_by_pts.pop(pts_ns, None)
+
+    def take_nearest_frame_marker(self, pts_ns, tolerance_ns):
+        if pts_ns is None:
+            return None
+        best_pts = None
+        best_delta = None
+        for candidate_pts in self.frame_markers_by_pts.keys():
+            delta = abs(candidate_pts - pts_ns)
+            if delta <= tolerance_ns and (best_delta is None or delta < best_delta):
+                best_pts = candidate_pts
+                best_delta = delta
+        if best_pts is None:
+            return None
+        marker = self.frame_markers_by_pts.pop(best_pts)
+        marker["pts_match_delta_ns"] = best_delta
+        return marker
+
+    def draw(self, _overlay, context, timestamp, _duration):
         started_at = monotonic_ns()
         current_frame_seq = self.frame_seq
         self.frame_seq = (self.frame_seq + 1) & 0xFFFF
@@ -318,16 +354,21 @@ class ORTMOverlayRenderer:
             context.restore()
 
         render_ms = (monotonic_ns() - started_at) / 1_000_000.0
-        self.frame_markers.append(
+        pts_ns = (
+            int(timestamp)
+            if timestamp is not None and int(timestamp) != Gst.CLOCK_TIME_NONE
+            else None
+        )
+        self._remember_frame_marker(
+            pts_ns,
             {
+                "pts_ns": pts_ns,
                 "frame_seq": current_frame_seq,
                 "timestamp_ms_full": timestamp_ms_full,
                 "render_ms": render_ms,
                 "overlay_done_monotonic_ns": monotonic_ns(),
-            }
+            },
         )
-        if len(self.frame_markers) > 180:
-            self.frame_markers.popleft()
         self.render_stats.add(render_ms)
         if self.render_stats.count % self.metrics_interval_frames == 0:
             print(
@@ -563,11 +604,13 @@ def main():
     overlay.connect("draw", renderer.draw)
 
     if metrics_enabled == "1":
-        overlay_frame_times = deque()
-        pre_encoder_times = deque()
-        post_encoder_times = deque()
-        post_parse_times = deque()
         encoded_frame_stats = EncodedFrameStats(frame_metrics_window_seconds)
+        frame_records_by_pts = {}
+        frame_record_order = deque()
+        frame_record_limit = 600
+        nearest_marker_tolerance_ns = 2_000_000
+        last_metric_print_count = 0
+        encoded_pts_offset_ns = None
 
         def make_stats():
             return {
@@ -584,7 +627,132 @@ def main():
             "encoded_to_send_ms": make_stats(),
             "overlay_to_send_ms": make_stats(),
         }
-        pipeline_dropped = 0
+        pts_stats = {
+            "invalid": 0,
+            "records_expired": 0,
+            "overlay_marker_miss": 0,
+            "overlay_marker_nearest": 0,
+            "pts_sample_logs": 0,
+            "encoded_pts_offset_discovered": 0,
+            "encoded_pts_offset_miss": 0,
+            "pre_encoder_miss": 0,
+            "post_encoder_miss": 0,
+            "post_parse_miss": 0,
+            "send_miss": 0,
+            "send_marker_miss": 0,
+            "duplicate_stage": 0,
+        }
+
+        def buffer_pts_ns(buffer):
+            pts = int(buffer.pts)
+            if pts == Gst.CLOCK_TIME_NONE:
+                pts_stats["invalid"] += 1
+                return None
+            return pts
+
+        def expire_frame_records():
+            while len(frame_record_order) > frame_record_limit:
+                old_pts = frame_record_order.popleft()
+                if frame_records_by_pts.pop(old_pts, None) is not None:
+                    pts_stats["records_expired"] += 1
+
+        def get_or_create_frame_record(pts_ns):
+            if pts_ns is None:
+                return None
+            record = frame_records_by_pts.get(pts_ns)
+            if record is None:
+                record = {"pts_ns": pts_ns}
+                frame_records_by_pts[pts_ns] = record
+                frame_record_order.append(pts_ns)
+                expire_frame_records()
+            return record
+
+        def get_frame_record(pts_ns, miss_name):
+            if pts_ns is None:
+                return None
+            record = frame_records_by_pts.get(pts_ns)
+            if record is None:
+                pts_stats[miss_name] += 1
+            return record
+
+        def find_oldest_record_with(stage_time_key):
+            while frame_record_order:
+                candidate_pts = frame_record_order[0]
+                record = frame_records_by_pts.get(candidate_pts)
+                if record is None:
+                    frame_record_order.popleft()
+                    continue
+                if stage_time_key in record:
+                    return candidate_pts, record
+                break
+            return None, None
+
+        def get_encoded_frame_record(encoded_pts_ns, miss_name, stage_name, required_stage_time_key):
+            nonlocal encoded_pts_offset_ns
+            if encoded_pts_ns is None:
+                return None, None
+            record = frame_records_by_pts.get(encoded_pts_ns)
+            if record is not None:
+                return record, encoded_pts_ns
+
+            if encoded_pts_offset_ns is not None:
+                source_pts_ns = encoded_pts_ns - encoded_pts_offset_ns
+                record = frame_records_by_pts.get(source_pts_ns)
+                if record is not None:
+                    return record, source_pts_ns
+
+            source_pts_ns, record = find_oldest_record_with(required_stage_time_key)
+            if record is not None:
+                candidate_offset_ns = encoded_pts_ns - source_pts_ns
+                if encoded_pts_offset_ns is None:
+                    encoded_pts_offset_ns = candidate_offset_ns
+                    pts_stats["encoded_pts_offset_discovered"] += 1
+                    print(
+                        "PTS_OFFSET "
+                        f"stage={stage_name} "
+                        f"encoded_pts={encoded_pts_ns} "
+                        f"source_pts={source_pts_ns} "
+                        f"offset={encoded_pts_offset_ns}",
+                        flush=True,
+                    )
+                if encoded_pts_ns - encoded_pts_offset_ns == source_pts_ns:
+                    return record, source_pts_ns
+
+            pts_stats[miss_name] += 1
+            pts_stats["encoded_pts_offset_miss"] += 1
+            return None, None
+
+        def describe_active_pts():
+            active_pts = list(frame_records_by_pts.keys())
+            if not active_pts:
+                return "active=0"
+            return (
+                f"active={len(active_pts)} "
+                f"min={min(active_pts)} "
+                f"max={max(active_pts)} "
+                f"oldest={frame_record_order[0] if frame_record_order else -1} "
+                f"newest={frame_record_order[-1] if frame_record_order else -1}"
+            )
+
+        def maybe_log_pts_sample(stage_name, pts_ns):
+            if pts_stats["pts_sample_logs"] >= 12:
+                return
+            pts_stats["pts_sample_logs"] += 1
+            print(
+                "PTS_SAMPLE "
+                f"stage={stage_name} "
+                f"pts={pts_ns} "
+                f"{describe_active_pts()}",
+                flush=True,
+            )
+
+        def set_stage_time(record, stage_name, now_ns):
+            if record is None:
+                return
+            key = f"{stage_name}_at"
+            if key in record:
+                pts_stats["duplicate_stage"] += 1
+            record[key] = now_ns
 
         def record_stat(metric_name, delay_ms):
             stats = metric_stats[metric_name]
@@ -639,18 +807,49 @@ def main():
                 flush=True,
             )
 
-        def append_time(queue):
-            nonlocal pipeline_dropped
-            queue.append(monotonic_ns())
-            if len(queue) > 180:
-                queue.popleft()
-                pipeline_dropped += 1
+        def print_pts_mapping():
+            print(
+                "PTS_MAPPING "
+                f"active_records={len(frame_records_by_pts)} "
+                f"invalid={pts_stats['invalid']} "
+                f"records_expired={pts_stats['records_expired']} "
+                f"marker_pending={len(renderer.frame_markers_by_pts)} "
+                f"marker_expired={renderer.marker_expired_pts} "
+                f"marker_duplicate={renderer.marker_duplicate_pts} "
+                f"overlay_marker_miss={pts_stats['overlay_marker_miss']} "
+                f"overlay_marker_nearest={pts_stats['overlay_marker_nearest']} "
+                f"pts_sample_logs={pts_stats['pts_sample_logs']} "
+                f"encoded_pts_offset={encoded_pts_offset_ns if encoded_pts_offset_ns is not None else '<unset>'} "
+                f"encoded_pts_offset_discovered={pts_stats['encoded_pts_offset_discovered']} "
+                f"encoded_pts_offset_miss={pts_stats['encoded_pts_offset_miss']} "
+                f"pre_encoder_miss={pts_stats['pre_encoder_miss']} "
+                f"post_encoder_miss={pts_stats['post_encoder_miss']} "
+                f"post_parse_miss={pts_stats['post_parse_miss']} "
+                f"send_miss={pts_stats['send_miss']} "
+                f"send_marker_miss={pts_stats['send_marker_miss']} "
+                f"duplicate_stage={pts_stats['duplicate_stage']}",
+                flush=True,
+            )
 
         def overlay_probe(_pad, info):
             buffer = info.get_buffer()
             if buffer is None:
                 return Gst.PadProbeReturn.OK
-            append_time(overlay_frame_times)
+            pts_ns = buffer_pts_ns(buffer)
+            now = monotonic_ns()
+            record = get_or_create_frame_record(pts_ns)
+            marker = renderer.take_frame_marker(pts_ns)
+            if marker is None:
+                marker = renderer.take_nearest_frame_marker(
+                    pts_ns, nearest_marker_tolerance_ns
+                )
+                if marker is not None:
+                    pts_stats["overlay_marker_nearest"] += 1
+            if marker is None:
+                pts_stats["overlay_marker_miss"] += 1
+            if record is not None:
+                record["marker"] = marker
+                set_stage_time(record, "overlay", now)
             return Gst.PadProbeReturn.OK
 
         def pre_encoder_probe(_pad, info):
@@ -658,10 +857,14 @@ def main():
             if buffer is None:
                 return Gst.PadProbeReturn.OK
             now = monotonic_ns()
-            if overlay_frame_times:
-                started_at = overlay_frame_times.popleft()
-                record_stat("overlay_to_encoder_ms", (now - started_at) / 1_000_000.0)
-            append_time(pre_encoder_times)
+            pts_ns = buffer_pts_ns(buffer)
+            record = get_frame_record(pts_ns, "pre_encoder_miss")
+            if record is not None and "overlay_at" in record:
+                record_stat(
+                    "overlay_to_encoder_ms",
+                    (now - record["overlay_at"]) / 1_000_000.0,
+                )
+            set_stage_time(record, "pre_encoder", now)
             return Gst.PadProbeReturn.OK
 
         def post_encoder_probe(_pad, info):
@@ -669,10 +872,18 @@ def main():
             if buffer is None:
                 return Gst.PadProbeReturn.OK
             now = monotonic_ns()
-            if pre_encoder_times:
-                started_at = pre_encoder_times.popleft()
-                record_stat("encoder_ms", (now - started_at) / 1_000_000.0)
-            append_time(post_encoder_times)
+            pts_ns = buffer_pts_ns(buffer)
+            record, _source_pts_ns = get_encoded_frame_record(
+                pts_ns, "post_encoder_miss", "post_encoder", "pre_encoder_at"
+            )
+            if record is None:
+                maybe_log_pts_sample("post_encoder", pts_ns)
+            if record is not None and "pre_encoder_at" in record:
+                record_stat(
+                    "encoder_ms",
+                    (now - record["pre_encoder_at"]) / 1_000_000.0,
+                )
+            set_stage_time(record, "post_encoder", now)
             return Gst.PadProbeReturn.OK
 
         def post_parse_probe(_pad, info):
@@ -680,30 +891,42 @@ def main():
             if buffer is None:
                 return Gst.PadProbeReturn.OK
             now = monotonic_ns()
-            if post_encoder_times:
-                started_at = post_encoder_times.popleft()
-                record_stat("parse_ms", (now - started_at) / 1_000_000.0)
-            append_time(post_parse_times)
+            pts_ns = buffer_pts_ns(buffer)
+            record, _source_pts_ns = get_encoded_frame_record(
+                pts_ns, "post_parse_miss", "post_parse", "post_encoder_at"
+            )
+            if record is None:
+                maybe_log_pts_sample("post_parse", pts_ns)
+            if record is not None and "post_encoder_at" in record:
+                record_stat(
+                    "parse_ms",
+                    (now - record["post_encoder_at"]) / 1_000_000.0,
+                )
+            set_stage_time(record, "post_parse", now)
             return Gst.PadProbeReturn.OK
 
         def send_probe(_pad, info):
+            nonlocal last_metric_print_count
             buffer = info.get_buffer()
             if buffer is None:
                 return Gst.PadProbeReturn.OK
 
             now = monotonic_ns()
+            pts_ns = buffer_pts_ns(buffer)
+            record, source_pts_ns = get_encoded_frame_record(
+                pts_ns, "send_miss", "send", "post_parse_at"
+            )
+            if record is None:
+                maybe_log_pts_sample("send", pts_ns)
             encoded_size_bytes = buffer.get_size()
             is_keyframe = not buffer.has_flags(Gst.BufferFlags.DELTA_UNIT)
             encoded_frame_stats.add(now, encoded_size_bytes, is_keyframe)
             encoded_to_send_ms = None
-            if post_parse_times:
-                started_at = post_parse_times.popleft()
-                encoded_to_send_ms = (now - started_at) / 1_000_000.0
+            if record is not None and "post_parse_at" in record:
+                encoded_to_send_ms = (now - record["post_parse_at"]) / 1_000_000.0
                 record_stat("encoded_to_send_ms", encoded_to_send_ms)
 
-            frame_marker = (
-                renderer.frame_markers.popleft() if renderer.frame_markers else None
-            )
+            frame_marker = record.get("marker") if record is not None else None
             overlay_to_send_ms = None
             if frame_marker is not None:
                 overlay_done_at = frame_marker.get("overlay_done_monotonic_ns")
@@ -711,6 +934,8 @@ def main():
                     overlay_to_send_ms = (now - overlay_done_at) / 1_000_000.0
                 else:
                     overlay_to_send_ms = None
+            else:
+                pts_stats["send_marker_miss"] += 1
             if overlay_to_send_ms is not None:
                 record_stat("overlay_to_send_ms", overlay_to_send_ms)
 
@@ -741,15 +966,17 @@ def main():
                     flush=True,
                 )
 
-            if metric_stats["overlay_to_send_ms"]["count"] % metrics_interval_frames == 0:
+            if (
+                encoded_frame_stats.count > last_metric_print_count
+                and encoded_frame_stats.count % metrics_interval_frames == 0
+            ):
+                last_metric_print_count = encoded_frame_stats.count
                 for metric_name, stats in metric_stats.items():
                     print_metric(metric_name, stats)
                 print_frame_metrics(now)
-                print(
-                    "PIPELINE dropped_pts "
-                    f"value={pipeline_dropped}",
-                    flush=True,
-                )
+                print_pts_mapping()
+            if record is not None:
+                frame_records_by_pts.pop(source_pts_ns, None)
             return Gst.PadProbeReturn.OK
 
         overlay_src_pad = overlay.get_static_pad("src")
