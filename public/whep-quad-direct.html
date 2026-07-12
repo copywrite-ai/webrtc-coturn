@@ -243,43 +243,63 @@
       }
       .metrics {
         display: grid;
-        gap: 4px;
+        gap: 3px;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         flex: 0 0 auto;
-        padding: 6px;
+        padding: 4px 5px;
       }
       .metric {
         display: grid;
         align-content: start;
-        gap: 2px;
+        gap: 1px;
         min-width: 0;
-        padding: 5px 6px;
+        padding: 3px 4px;
         border-radius: 6px;
         background: #f8fafc;
         border: 1px solid rgba(148, 163, 184, 0.16);
       }
       .metric-label {
-        font-size: 9px;
+        font-size: 8px;
         color: var(--muted);
         text-transform: uppercase;
-        letter-spacing: 0.02em;
+        letter-spacing: 0;
       }
       .metric-value {
-        font-size: 12px;
+        font-size: 10px;
         font-weight: 600;
         color: var(--text);
       }
       .metric-sub {
-        font-size: 9px;
+        font-size: 8px;
         color: var(--muted);
         display: grid;
-        gap: 1px;
+        gap: 0;
       }
       .metric-sub strong {
         display: block;
-        font-size: 11px;
+        font-size: 9px;
         font-weight: 600;
         color: var(--text);
+      }
+      [data-tip] {
+        cursor: help;
+      }
+      .tooltip {
+        position: fixed;
+        z-index: 1000;
+        max-width: 280px;
+        padding: 6px 8px;
+        border: 1px solid rgba(15, 23, 42, 0.16);
+        border-radius: 6px;
+        background: rgba(15, 23, 42, 0.96);
+        color: #fff;
+        font-size: 10px;
+        line-height: 1.4;
+        pointer-events: none;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
+      }
+      .tooltip[hidden] {
+        display: none;
       }
       .chart-panel {
         display: flex;
@@ -397,33 +417,41 @@
             <div class="slot-footer">
               <div class="metrics">
                 <div class="metric">
-                  <span class="metric-label">ICE</span>
+                  <span class="metric-label" data-tip="WebRTC ICE 连接状态。connected 表示浏览器与 WHEP 服务端已建立媒体通路。">ICE</span>
                   <strong class="metric-value ice">idle</strong>
-                  <span class="metric-sub">分辨率 <strong class="resolution">--</strong></span>
-                </div>
-                <div class="metric">
-                  <span class="metric-label">近似G2G</span>
-                  <strong class="metric-value latency-ortm">--</strong>
                   <span class="metric-sub">
-                    净G2G
-                    <strong class="latency-ortm-net">--</strong>
-                    样本年龄
-                    <strong class="ortm-sample-age">--</strong>
+                    <span data-tip="当前 video element 实际接收到的视频帧尺寸。">分辨率</span>
+                    <strong class="resolution">--</strong>
+                    <span data-tip="浏览器 WebRTC inbound-rtp 统计中的当前视频帧率。">FPS</span>
+                    <strong class="fps-state">--</strong>
                   </span>
                 </div>
                 <div class="metric">
-                  <span class="metric-label">前段</span>
-                  <strong class="metric-value latency-upstream">--</strong>
-                  <span class="metric-sub">净前段 <strong class="latency-upstream-net">--</strong></span>
+                  <span class="metric-label" data-tip="从发送端把 ORTM 时间码画进视频帧，到浏览器端解出该时间码的近似端到端延迟。">近似G2G</span>
+                  <strong class="metric-value latency-ortm">--</strong>
+                  <span class="metric-sub">
+                    <span data-tip="近似G2G 扣除浏览器侧 draw/read/decode 观测开销后的估算值。">净G2G</span>
+                    <strong class="latency-ortm-net">--</strong>
+                  </span>
                 </div>
                 <div class="metric">
-                  <span class="metric-label">播放侧</span>
-                  <strong class="metric-value latency-fallback">--</strong>
+                  <span class="metric-label" data-tip="近似G2G 扣除浏览器播放侧估算开销后的前段链路延迟，主要覆盖发送端、网络、服务端和 WebRTC 接收链路。">前段</span>
+                  <strong class="metric-value latency-upstream">--</strong>
                   <span class="metric-sub">
-                    浏览器
+                    <span data-tip="前段延迟再扣除浏览器侧观测开销后的估算值。">净前段</span>
+                    <strong class="latency-upstream-net">--</strong>
+                  </span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label" data-tip="浏览器 WebRTC 统计中的 freeze 和 pause 累计次数；大于 0 表示播放过程中曾检测到视频冻结或暂停。">Freeze</span>
+                  <strong class="metric-value freeze-state">0</strong>
+                  <span class="metric-sub">
+                    <strong class="latency-fallback" hidden>--</strong>
+                    <span data-tip="页面侧 drawImage、getImageData 和 ORTM 解码的平均观测开销。">浏览器</span>
                     <strong class="browser-cost">--</strong>
-                    帧序号 / 停滞
-                    <strong class="ortm-frame-state">--</strong>
+                    <span data-tip="距离上一次成功解出 ORTM 样本过去的时间；正常会随解码节流在几十到约 200ms 内波动。">样本</span>
+                    <strong class="ortm-sample-age">--</strong>
+                    <strong class="ortm-frame-state" hidden>--</strong>
                   </span>
                 </div>
               </div>
@@ -435,14 +463,16 @@
         </div>
       </article>
     </template>
+    <div id="tooltip" class="tooltip" hidden></div>
 
     <script>
-      const BUILD_VERSION = '2026-07-12-whep-quad-direct-ortm-throttle-1';
+      const BUILD_VERSION = '2026-07-12-whep-quad-direct-fast-tooltips';
       const logEl = document.getElementById('log');
       const logPanelEl = document.getElementById('logPanel');
       const slotsEl = document.getElementById('slots');
       const template = document.getElementById('slotTemplate');
       const buildBadgeEl = document.getElementById('buildBadge');
+      const tooltipEl = document.getElementById('tooltip');
       const params = new URLSearchParams(location.search);
       buildBadgeEl.textContent = `Build ${BUILD_VERSION}`;
       const clientLogEndpoint = '/client-log';
@@ -462,7 +492,7 @@
         gridSize: 32,
         finderSize: 4,
         timingIndex: 4,
-        scales: [1.0, 0.95, 1.05, 0.9, 1.1],
+        scales: [1.0, 0.95, 1.05, 0.9, 1.1, 2.0, 1.9, 2.1],
         offsets: [0, -4, 4],
       };
       const ORTM_PAYLOAD_BITS = 4 + 16 + 32 + 16;
@@ -480,6 +510,36 @@
         logEl.textContent += `${line}\n`;
         logEl.scrollTop = logEl.scrollHeight;
         console.log(line);
+      }
+
+      function positionTooltip(target) {
+        if (!tooltipEl || !target) return;
+        const rect = target.getBoundingClientRect();
+        const margin = 8;
+        tooltipEl.hidden = false;
+        const tooltipRect = tooltipEl.getBoundingClientRect();
+        let left = rect.left;
+        let top = rect.bottom + margin;
+        if (left + tooltipRect.width > window.innerWidth - margin) {
+          left = window.innerWidth - tooltipRect.width - margin;
+        }
+        if (top + tooltipRect.height > window.innerHeight - margin) {
+          top = rect.top - tooltipRect.height - margin;
+        }
+        tooltipEl.style.left = `${Math.max(margin, left)}px`;
+        tooltipEl.style.top = `${Math.max(margin, top)}px`;
+      }
+
+      function showTooltip(target) {
+        const text = target?.dataset?.tip;
+        if (!tooltipEl || !text) return;
+        tooltipEl.textContent = text;
+        positionTooltip(target);
+      }
+
+      function hideTooltip() {
+        if (!tooltipEl) return;
+        tooltipEl.hidden = true;
       }
 
       function queueClientLog(entry) {
@@ -796,6 +856,7 @@
         const stopBtn = node.querySelector('.stop');
         const iceEl = node.querySelector('.ice');
         const resolutionEl = node.querySelector('.resolution');
+        const fpsStateEl = node.querySelector('.fps-state');
         const ortmLatencyEl = node.querySelector('.latency-ortm');
         const ortmNetLatencyEl = node.querySelector('.latency-ortm-net');
         const ortmSampleAgeEl = node.querySelector('.ortm-sample-age');
@@ -803,6 +864,7 @@
         const upstreamLatencyEl = node.querySelector('.latency-upstream');
         const upstreamNetLatencyEl = node.querySelector('.latency-upstream-net');
         const browserCostEl = node.querySelector('.browser-cost');
+        const freezeStateEl = node.querySelector('.freeze-state');
         const ortmFrameStateEl = node.querySelector('.ortm-frame-state');
         const chartCanvasEl = node.querySelector('.latency-chart');
         const videoEl = node.querySelector('video');
@@ -893,6 +955,32 @@
 
           const stalledMs = state.ortmFrameSeqStalledSince > 0 ? now - state.ortmFrameSeqStalledSince : 0;
           ortmFrameStateEl.textContent = `${state.ortmFrameSeq} / ${Math.round(stalledMs)} ms`;
+        }
+
+        function updateFreezeMetric() {
+          const freezeCount = state.rtcStats.freezeCount;
+          const pauseCount = state.rtcStats.pauseCount;
+          const freezeDurationMs = state.rtcStats.freezeDurationMs;
+          const pauseDurationMs = state.rtcStats.pauseDurationMs;
+          const totalCount =
+            (Number.isFinite(freezeCount) ? freezeCount : 0) +
+            (Number.isFinite(pauseCount) ? pauseCount : 0);
+          const totalDurationMs =
+            (Number.isFinite(freezeDurationMs) ? freezeDurationMs : 0) +
+            (Number.isFinite(pauseDurationMs) ? pauseDurationMs : 0);
+          freezeStateEl.textContent =
+            totalCount > 0 && totalDurationMs > 0
+              ? `${totalCount} / ${Math.round(totalDurationMs)} ms`
+              : `${totalCount}`;
+        }
+
+        function updateFpsMetric() {
+          const fpsValue = state.rtcStats.framesPerSecond;
+          const recvFpsValue = state.rtcStats.framesReceivedPerSecond;
+          const displayValue = Number.isFinite(fpsValue) ? fpsValue : recvFpsValue;
+          fpsStateEl.textContent = Number.isFinite(displayValue)
+            ? `${Math.round(displayValue)}`
+            : '--';
         }
 
         function pushChartSample(value) {
@@ -1058,9 +1146,11 @@
           ortmLatencyEl.textContent = '--';
           ortmNetLatencyEl.textContent = '--';
           ortmSampleAgeEl.textContent = '--';
+          fpsStateEl.textContent = '--';
           upstreamLatencyEl.textContent = '--';
           upstreamNetLatencyEl.textContent = '--';
           browserCostEl.textContent = '--';
+          freezeStateEl.textContent = '0';
           ortmFrameStateEl.textContent = '--';
           renderChart();
         }
@@ -1240,12 +1330,16 @@
           videoEl.srcObject = null;
           iceEl.textContent = 'idle';
           resolutionEl.textContent = '--';
+          fpsStateEl.textContent = '--';
           ortmLatencyEl.textContent = '--';
           ortmNetLatencyEl.textContent = '--';
           fallbackLatencyEl.textContent = '--';
           upstreamLatencyEl.textContent = '--';
           upstreamNetLatencyEl.textContent = '--';
           browserCostEl.textContent = '--';
+          freezeStateEl.textContent = '0';
+          ortmSampleAgeEl.textContent = '--';
+          ortmFrameStateEl.textContent = '--';
           state.lastMetricLogLine = null;
           setStatus('stopped');
           renderChart();
@@ -1365,6 +1459,8 @@
                 }
               });
               updateRtcStats(inbound);
+              updateFpsMetric();
+              updateFreezeMetric();
               if (
                 state.ortmLastResult &&
                 performance.now() - state.ortmLastSuccessAt < 1500 &&
@@ -1634,7 +1730,30 @@
         logPanelEl.open = !logPanelEl.open;
       });
 
+      document.addEventListener('mouseover', (event) => {
+        const target = event.target.closest('[data-tip]');
+        if (target) {
+          showTooltip(target);
+        }
+      });
+
+      document.addEventListener('mousemove', (event) => {
+        const target = event.target.closest('[data-tip]');
+        if (target && !tooltipEl.hidden) {
+          positionTooltip(target);
+        }
+      });
+
+      document.addEventListener('mouseout', (event) => {
+        if (!event.target.closest('[data-tip]')) return;
+        const nextTarget = event.relatedTarget?.closest?.('[data-tip]');
+        if (!nextTarget) {
+          hideTooltip();
+        }
+      });
+
       window.addEventListener('resize', () => {
+        hideTooltip();
         slots.forEach((slot) => {
           if (typeof slot.renderChart === 'function') {
             slot.renderChart();

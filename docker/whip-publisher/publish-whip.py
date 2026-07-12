@@ -611,6 +611,12 @@ def main():
         nearest_marker_tolerance_ns = 2_000_000
         last_metric_print_count = 0
         encoded_pts_offset_ns = None
+        encoded_pts_offset_confirm_samples = int(
+            os.environ.get("PTS_OFFSET_CONFIRM_SAMPLES", "5")
+        )
+        encoded_pts_offset_candidates = {}
+        encoded_pts_offset_seen = set()
+        encoded_pts_offset_candidate_limit = 200
 
         def make_stats():
             return {
@@ -635,6 +641,8 @@ def main():
             "pts_sample_logs": 0,
             "encoded_pts_offset_discovered": 0,
             "encoded_pts_offset_miss": 0,
+            "encoded_pts_offset_pending": 0,
+            "encoded_pts_offset_confirmations": 0,
             "pre_encoder_miss": 0,
             "post_encoder_miss": 0,
             "post_parse_miss": 0,
@@ -675,17 +683,82 @@ def main():
                 pts_stats[miss_name] += 1
             return record
 
-        def find_oldest_record_with(stage_time_key):
-            while frame_record_order:
-                candidate_pts = frame_record_order[0]
+        def records_with_stage(stage_time_key):
+            for candidate_pts in list(frame_record_order):
                 record = frame_records_by_pts.get(candidate_pts)
                 if record is None:
-                    frame_record_order.popleft()
+                    if frame_record_order and frame_record_order[0] == candidate_pts:
+                        frame_record_order.popleft()
                     continue
                 if stage_time_key in record:
-                    return candidate_pts, record
-                break
-            return None, None
+                    yield candidate_pts, record
+
+        def trim_offset_candidates():
+            while len(encoded_pts_offset_candidates) > encoded_pts_offset_candidate_limit:
+                weakest_offset = min(
+                    encoded_pts_offset_candidates,
+                    key=lambda offset: (
+                        encoded_pts_offset_candidates[offset]["count"],
+                        encoded_pts_offset_candidates[offset]["last_seen_ns"],
+                    ),
+                )
+                encoded_pts_offset_candidates.pop(weakest_offset, None)
+
+        def find_nearest_timed_record(stage_time_key, now_ns):
+            best = None
+            best_age_ns = None
+            for candidate_pts, record in records_with_stage(stage_time_key):
+                stage_time_ns = record.get(stage_time_key)
+                if stage_time_ns is None or stage_time_ns > now_ns:
+                    continue
+                age_ns = now_ns - stage_time_ns
+                if best_age_ns is None or age_ns < best_age_ns:
+                    best = (candidate_pts, record)
+                    best_age_ns = age_ns
+            return best
+
+        def maybe_confirm_encoded_pts_offset(encoded_pts_ns, stage_name, required_stage_time_key):
+            nonlocal encoded_pts_offset_ns
+            if encoded_pts_offset_ns is not None:
+                return
+            if stage_name != "post_encoder":
+                pts_stats["encoded_pts_offset_pending"] += 1
+                return
+
+            seen_key = (stage_name, encoded_pts_ns)
+            if seen_key in encoded_pts_offset_seen:
+                return
+            encoded_pts_offset_seen.add(seen_key)
+
+            now_ns = monotonic_ns()
+            candidate_record = find_nearest_timed_record(
+                required_stage_time_key, now_ns
+            )
+            if candidate_record is not None:
+                source_pts_ns, _record = candidate_record
+                candidate_offset_ns = encoded_pts_ns - source_pts_ns
+                candidate = encoded_pts_offset_candidates.setdefault(
+                    candidate_offset_ns,
+                    {"count": 0, "last_seen_ns": 0},
+                )
+                candidate["count"] += 1
+                candidate["last_seen_ns"] = now_ns
+                if candidate["count"] >= encoded_pts_offset_confirm_samples:
+                    encoded_pts_offset_ns = candidate_offset_ns
+                    pts_stats["encoded_pts_offset_discovered"] += 1
+                    pts_stats["encoded_pts_offset_confirmations"] = candidate["count"]
+                    print(
+                        "PTS_OFFSET "
+                        f"stage={stage_name} "
+                        f"encoded_pts={encoded_pts_ns} "
+                        f"offset={encoded_pts_offset_ns} "
+                        f"confirmations={candidate['count']} "
+                        f"required_confirmations={encoded_pts_offset_confirm_samples}",
+                        flush=True,
+                    )
+            trim_offset_candidates()
+            if encoded_pts_offset_ns is None:
+                pts_stats["encoded_pts_offset_pending"] += 1
 
         def get_encoded_frame_record(encoded_pts_ns, miss_name, stage_name, required_stage_time_key):
             nonlocal encoded_pts_offset_ns
@@ -701,21 +774,13 @@ def main():
                 if record is not None:
                     return record, source_pts_ns
 
-            source_pts_ns, record = find_oldest_record_with(required_stage_time_key)
-            if record is not None:
-                candidate_offset_ns = encoded_pts_ns - source_pts_ns
-                if encoded_pts_offset_ns is None:
-                    encoded_pts_offset_ns = candidate_offset_ns
-                    pts_stats["encoded_pts_offset_discovered"] += 1
-                    print(
-                        "PTS_OFFSET "
-                        f"stage={stage_name} "
-                        f"encoded_pts={encoded_pts_ns} "
-                        f"source_pts={source_pts_ns} "
-                        f"offset={encoded_pts_offset_ns}",
-                        flush=True,
-                    )
-                if encoded_pts_ns - encoded_pts_offset_ns == source_pts_ns:
+            maybe_confirm_encoded_pts_offset(
+                encoded_pts_ns, stage_name, required_stage_time_key
+            )
+            if encoded_pts_offset_ns is not None:
+                source_pts_ns = encoded_pts_ns - encoded_pts_offset_ns
+                record = frame_records_by_pts.get(source_pts_ns)
+                if record is not None:
                     return record, source_pts_ns
 
             pts_stats[miss_name] += 1
@@ -822,6 +887,10 @@ def main():
                 f"encoded_pts_offset={encoded_pts_offset_ns if encoded_pts_offset_ns is not None else '<unset>'} "
                 f"encoded_pts_offset_discovered={pts_stats['encoded_pts_offset_discovered']} "
                 f"encoded_pts_offset_miss={pts_stats['encoded_pts_offset_miss']} "
+                f"encoded_pts_offset_pending={pts_stats['encoded_pts_offset_pending']} "
+                f"encoded_pts_offset_candidates={len(encoded_pts_offset_candidates)} "
+                f"encoded_pts_offset_confirmations={pts_stats['encoded_pts_offset_confirmations']} "
+                f"encoded_pts_offset_required={encoded_pts_offset_confirm_samples} "
                 f"pre_encoder_miss={pts_stats['pre_encoder_miss']} "
                 f"post_encoder_miss={pts_stats['post_encoder_miss']} "
                 f"post_parse_miss={pts_stats['post_parse_miss']} "

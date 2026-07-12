@@ -58,6 +58,7 @@ services:
       WHIP_CC_MIN_BITRATE_BPS: "${WHIP_CC_MIN_BITRATE_BPS:-}"
       WHIP_CC_MAX_BITRATE_BPS: "${WHIP_CC_MAX_BITRATE_BPS:-}"
       WHIP_MITIGATION_MODES: "${WHIP_MITIGATION_MODES:-none}"
+      PTS_OFFSET_CONFIRM_SAMPLES: "${PTS_OFFSET_CONFIRM_SAMPLES:-5}"
     restart: unless-stopped
 
   fish_back_whip:
