@@ -241,6 +241,7 @@ class ORTMOverlayRenderer:
         metrics_interval_frames,
         timezone,
         draw_timestamp_text,
+        background_alpha,
     ):
         self.x = x
         self.y = y
@@ -250,6 +251,7 @@ class ORTMOverlayRenderer:
         self.metrics_interval_frames = max(metrics_interval_frames, 1)
         self.timezone = timezone
         self.draw_timestamp_text = draw_timestamp_text
+        self.background_alpha = max(0.0, min(background_alpha, 1.0))
         self.render_stats = StatsWindow()
         self.frame_markers_by_pts = {}
         self.frame_marker_order = deque()
@@ -306,9 +308,10 @@ class ORTMOverlayRenderer:
             context.set_antialias(cairo.ANTIALIAS_NONE)
             context.set_line_width(2.0)
 
-            context.set_source_rgb(1.0, 1.0, 1.0)
-            context.rectangle(self.x, self.y, self.marker_size, self.marker_size)
-            context.fill()
+            if self.background_alpha > 0:
+                context.set_source_rgba(1.0, 1.0, 1.0, self.background_alpha)
+                context.rectangle(self.x, self.y, self.marker_size, self.marker_size)
+                context.fill()
 
             context.set_source_rgb(0.0, 0.0, 0.0)
             context.rectangle(self.x, self.y, self.marker_size, self.marker_size)
@@ -383,6 +386,12 @@ class ORTMOverlayRenderer:
 
 def build_pipeline_description(
     *,
+    video_source,
+    video_device,
+    video_source_width,
+    video_source_height,
+    video_source_fps,
+    source_pipeline,
     pattern,
     width,
     height,
@@ -411,8 +420,37 @@ def build_pipeline_description(
     if x264_vbv_buf_capacity_ms is not None:
         encoder_args.append(f"vbv-buf-capacity={x264_vbv_buf_capacity_ms}")
 
+    if source_pipeline:
+        source_description = source_pipeline
+    elif video_source == "testsrc":
+        source_description = f"videotestsrc is-live=true pattern={gst_quote(pattern)}"
+    elif video_source == "avf":
+        source_caps = ""
+        if video_source_width is not None and video_source_height is not None:
+            source_caps = (
+                f"! video/x-raw,width={video_source_width},height={video_source_height},"
+                f"framerate={video_source_fps or fps}/1 "
+            )
+        source_description = (
+            f"avfvideosrc device-index={int(video_device)} "
+            f"{source_caps}"
+            "! queue leaky=downstream max-size-buffers=2 max-size-time=0 max-size-bytes=0"
+        )
+    elif video_source == "v4l2":
+        source_description = (
+            f"v4l2src device={gst_quote(video_device)} do-timestamp=true "
+            "! queue leaky=downstream max-size-buffers=2 max-size-time=0 max-size-bytes=0"
+        )
+    else:
+        raise SystemExit(
+            f"unsupported VIDEO_SOURCE={video_source!r}; use testsrc, avf, v4l2, or pipeline"
+        )
+
     return (
-        f"videotestsrc is-live=true pattern={gst_quote(pattern)} "
+        f"{source_description} "
+        "! videoconvert "
+        "! videoscale "
+        "! videorate "
         f"! video/x-raw,width={width},height={height},framerate={fps}/1,format=BGRx "
         "! cairooverlay name=ortm_overlay "
         "! videoconvert "
@@ -446,6 +484,21 @@ def main():
     fps = env_int("FPS", 30)
     bitrate_kbps = env_int("BITRATE_KBPS", 8000)
     key_int_max = env_int("KEY_INT_MAX", 60)
+    video_source = env_value("VIDEO_SOURCE", "testsrc").strip().lower()
+    video_device = env_value("VIDEO_DEVICE", "/dev/video0")
+    video_source_width = env_optional_int("VIDEO_SOURCE_WIDTH")
+    video_source_height = env_optional_int("VIDEO_SOURCE_HEIGHT")
+    video_source_fps = env_optional_int("VIDEO_SOURCE_FPS")
+    if video_source == "avf" and video_source_width is None and video_source_height is None:
+        output_ratio = width / height
+        if abs(output_ratio - (16 / 9)) < abs(output_ratio - (4 / 3)):
+            video_source_width = 1280
+            video_source_height = 720
+        else:
+            video_source_width = 640
+            video_source_height = 480
+    source_pipeline = env_optional_value("SOURCE_PIPELINE")
+    source_mode = "pipeline" if source_pipeline else video_source
     pattern = env_value("PATTERN", "smpte")
     speed_preset = env_value("SPEED_PRESET", "ultrafast")
     x264_option_string = env_value(
@@ -473,6 +526,7 @@ def main():
     ortm_y = env_int("ORTM_Y", 24)
     ortm_cell = env_int("ORTM_CELL", 12)
     ortm_padding = env_int("ORTM_PADDING", 12)
+    ortm_background_alpha = env_float("ORTM_BACKGROUND_ALPHA", 1.0)
 
     base_url = whip_base_url.rstrip("/")
     if whip_include_device == "1":
@@ -518,7 +572,21 @@ def main():
     print(f"  resolution   : {width}x{height}", flush=True)
     print(f"  fps          : {fps}", flush=True)
     print(f"  bitrate      : {bitrate_kbps} kbps", flush=True)
-    print(f"  pattern      : {pattern}", flush=True)
+    print(f"  video source : {source_mode}", flush=True)
+    if source_mode == "testsrc":
+        print(f"  pattern      : {pattern}", flush=True)
+    if source_mode == "v4l2":
+        print(f"  video device : {video_device}", flush=True)
+    if source_mode == "avf":
+        print(f"  avf index    : {video_device}", flush=True)
+        if video_source_width is not None and video_source_height is not None:
+            print(
+                "  avf caps     : "
+                f"{video_source_width}x{video_source_height}@{video_source_fps or fps}",
+                flush=True,
+            )
+    if source_pipeline:
+        print(f"  src pipeline : {source_pipeline}", flush=True)
     print(f"  x264 preset  : {speed_preset}", flush=True)
     print(f"  x264 options : {x264_option_string}", flush=True)
     print(
@@ -541,6 +609,7 @@ def main():
         f"  ortm layout  : grid={GRID_SIZE}x{GRID_SIZE} cell={ortm_cell} padding={ortm_padding} x={ortm_x} y={ortm_y}",
         flush=True,
     )
+    print(f"  ortm bg alpha: {max(0.0, min(ortm_background_alpha, 1.0)):.2f}", flush=True)
     print(
         f"  timestamp    : {'wallclock text below marker' if timestamp_overlay == '1' else '<off>'}",
         flush=True,
@@ -571,6 +640,12 @@ def main():
     print("", flush=True)
 
     pipeline_description = build_pipeline_description(
+        video_source=video_source,
+        video_device=video_device,
+        video_source_width=video_source_width,
+        video_source_height=video_source_height,
+        video_source_fps=video_source_fps,
+        source_pipeline=source_pipeline,
         pattern=pattern,
         width=width,
         height=height,
@@ -600,6 +675,7 @@ def main():
         metrics_interval_frames=metrics_interval_frames,
         timezone=timestamp_tz,
         draw_timestamp_text=timestamp_overlay == "1",
+        background_alpha=ortm_background_alpha,
     )
     overlay.connect("draw", renderer.draw)
 

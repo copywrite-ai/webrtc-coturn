@@ -18,6 +18,7 @@ COPY publish-whip.py /usr/local/bin/publish-whip.py
 RUN chmod +x /usr/local/bin/publish-whip.sh /usr/local/bin/publish-whip.py \
   && python3 -c 'import cairo; import gi' \
   && gst-inspect-1.0 whipclientsink >/dev/null \
-  && gst-inspect-1.0 cairooverlay >/dev/null
+  && gst-inspect-1.0 cairooverlay >/dev/null \
+  && gst-inspect-1.0 v4l2src >/dev/null
 
 ENTRYPOINT ["/usr/local/bin/publish-whip.sh"]
