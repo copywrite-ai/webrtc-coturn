@@ -55,6 +55,7 @@ services:
       ORTM_CELL: "${ORTM_CELL:-12}"
       ORTM_PADDING: "${ORTM_PADDING:-12}"
       ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-1.0}"
+      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-1.0}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
       X264_THREADS: "${X264_THREADS:-}"
       X264_SLICED_THREADS: "${X264_SLICED_THREADS:-}"
@@ -102,6 +103,7 @@ services:
       ORTM_CELL: "${ORTM_CELL:-12}"
       ORTM_PADDING: "${ORTM_PADDING:-12}"
       ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-1.0}"
+      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-1.0}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped
 
@@ -142,6 +144,7 @@ services:
       ORTM_CELL: "${ORTM_CELL:-12}"
       ORTM_PADDING: "${ORTM_PADDING:-12}"
       ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-1.0}"
+      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-1.0}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped
 
@@ -182,6 +185,7 @@ services:
       ORTM_CELL: "${ORTM_CELL:-12}"
       ORTM_PADDING: "${ORTM_PADDING:-12}"
       ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-1.0}"
+      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-1.0}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped
 
@@ -222,5 +226,6 @@ services:
       ORTM_CELL: "${ORTM_CELL:-12}"
       ORTM_PADDING: "${ORTM_PADDING:-12}"
       ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-1.0}"
+      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-1.0}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped

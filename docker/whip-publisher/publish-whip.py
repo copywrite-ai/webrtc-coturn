@@ -22,6 +22,7 @@ GRID_SIZE = 32
 FINDER_SIZE = 4
 TIMING_INDEX = 4
 ORTM_VERSION = 0
+ORTM_PAYLOAD_BITS = 4 + 16 + 32 + 16
 
 
 def env_required(name):
@@ -96,6 +97,28 @@ def in_finder(row, col):
 
 def is_reserved_cell(row, col):
     return in_finder(row, col) or row == TIMING_INDEX or col == TIMING_INDEX
+
+
+def build_encoded_cells():
+    cells = {
+        (row, col)
+        for row in range(GRID_SIZE)
+        for col in range(GRID_SIZE)
+        if is_reserved_cell(row, col)
+    }
+    payload_cells = 0
+    for row in range(GRID_SIZE):
+        for col in range(GRID_SIZE):
+            if is_reserved_cell(row, col):
+                continue
+            if payload_cells >= ORTM_PAYLOAD_BITS:
+                return cells
+            cells.add((row, col))
+            payload_cells += 1
+    return cells
+
+
+ORTM_ENCODED_CELLS = build_encoded_cells()
 
 
 def draw_finder(bits, top, left):
@@ -242,6 +265,7 @@ class ORTMOverlayRenderer:
         timezone,
         draw_timestamp_text,
         background_alpha,
+        cell_alpha,
     ):
         self.x = x
         self.y = y
@@ -252,6 +276,7 @@ class ORTMOverlayRenderer:
         self.timezone = timezone
         self.draw_timestamp_text = draw_timestamp_text
         self.background_alpha = max(0.0, min(background_alpha, 1.0))
+        self.cell_alpha = max(0.0, min(cell_alpha, 1.0))
         self.render_stats = StatsWindow()
         self.frame_markers_by_pts = {}
         self.frame_marker_order = deque()
@@ -313,12 +338,26 @@ class ORTMOverlayRenderer:
                 context.rectangle(self.x, self.y, self.marker_size, self.marker_size)
                 context.fill()
 
-            context.set_source_rgb(0.0, 0.0, 0.0)
-            context.rectangle(self.x, self.y, self.marker_size, self.marker_size)
-            context.stroke()
-
             grid_origin_x = self.x + self.padding
             grid_origin_y = self.y + self.padding
+
+            context.set_source_rgba(1.0, 1.0, 1.0, self.cell_alpha)
+            for row in range(GRID_SIZE):
+                for col in range(GRID_SIZE):
+                    if (
+                        ortm_bits[row][col] != 0
+                        or (row, col) not in ORTM_ENCODED_CELLS
+                    ):
+                        continue
+                    context.rectangle(
+                        grid_origin_x + col * self.cell,
+                        grid_origin_y + row * self.cell,
+                        self.cell,
+                        self.cell,
+                    )
+            context.fill()
+
+            context.set_source_rgba(0.0, 0.0, 0.0, self.cell_alpha)
             for row in range(GRID_SIZE):
                 for col in range(GRID_SIZE):
                     if ortm_bits[row][col] != 1:
@@ -330,6 +369,10 @@ class ORTMOverlayRenderer:
                         self.cell,
                     )
             context.fill()
+
+            context.set_source_rgb(0.0, 0.0, 0.0)
+            context.rectangle(self.x, self.y, self.marker_size, self.marker_size)
+            context.stroke()
 
             if self.draw_timestamp_text:
                 label = timestamp_text(self.timezone)
@@ -527,6 +570,7 @@ def main():
     ortm_cell = env_int("ORTM_CELL", 12)
     ortm_padding = env_int("ORTM_PADDING", 12)
     ortm_background_alpha = env_float("ORTM_BACKGROUND_ALPHA", 1.0)
+    ortm_cell_alpha = env_float("ORTM_CELL_ALPHA", 1.0)
 
     base_url = whip_base_url.rstrip("/")
     if whip_include_device == "1":
@@ -610,6 +654,7 @@ def main():
         flush=True,
     )
     print(f"  ortm bg alpha: {max(0.0, min(ortm_background_alpha, 1.0)):.2f}", flush=True)
+    print(f"  ortm cell alpha: {max(0.0, min(ortm_cell_alpha, 1.0)):.2f}", flush=True)
     print(
         f"  timestamp    : {'wallclock text below marker' if timestamp_overlay == '1' else '<off>'}",
         flush=True,
@@ -676,6 +721,7 @@ def main():
         timezone=timestamp_tz,
         draw_timestamp_text=timestamp_overlay == "1",
         background_alpha=ortm_background_alpha,
+        cell_alpha=ortm_cell_alpha,
     )
     overlay.connect("draw", renderer.draw)
 

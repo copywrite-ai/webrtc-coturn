@@ -509,6 +509,54 @@ function prometheusSnapshot() {
     if (isMetricNumber(viewer.ortmNet)) {
       lines.push(`tunnel_viewer_slot_ortm_net_ms{${label}} ${Number(viewer.ortmNet)}`);
     }
+    if (isMetricNumber(viewer.ortmDecodeAttempts)) {
+      lines.push(`tunnel_viewer_slot_ortm_decode_attempts{${label}} ${Number(viewer.ortmDecodeAttempts)}`);
+    }
+    if (isMetricNumber(viewer.ortmDecodeSuccesses)) {
+      lines.push(`tunnel_viewer_slot_ortm_decode_successes{${label}} ${Number(viewer.ortmDecodeSuccesses)}`);
+    }
+    if (isMetricNumber(viewer.ortmDecodeFailures)) {
+      lines.push(`tunnel_viewer_slot_ortm_decode_failures{${label}} ${Number(viewer.ortmDecodeFailures)}`);
+    }
+    if (isMetricNumber(viewer.ortmDecodeSuccessRate)) {
+      lines.push(`tunnel_viewer_slot_ortm_decode_success_percent{${label}} ${Number(viewer.ortmDecodeSuccessRate)}`);
+    }
+    if (isMetricNumber(viewer.ortmCrcFailures)) {
+      lines.push(`tunnel_viewer_slot_ortm_crc_failures{${label}} ${Number(viewer.ortmCrcFailures)}`);
+    }
+    if (isMetricNumber(viewer.ortmStructureFailures)) {
+      lines.push(`tunnel_viewer_slot_ortm_structure_failures{${label}} ${Number(viewer.ortmStructureFailures)}`);
+    }
+    if (isMetricNumber(viewer.ortmLowContrastFailures)) {
+      lines.push(`tunnel_viewer_slot_ortm_low_contrast_failures{${label}} ${Number(viewer.ortmLowContrastFailures)}`);
+    }
+    if (isMetricNumber(viewer.ortmFinderErrors)) {
+      lines.push(`tunnel_viewer_slot_ortm_finder_errors{${label}} ${Number(viewer.ortmFinderErrors)}`);
+    }
+    if (isMetricNumber(viewer.ortmTimingErrors)) {
+      lines.push(`tunnel_viewer_slot_ortm_timing_errors{${label}} ${Number(viewer.ortmTimingErrors)}`);
+    }
+    if (isMetricNumber(viewer.ortmBlack)) {
+      lines.push(`tunnel_viewer_slot_ortm_black_luma{${label}} ${Number(viewer.ortmBlack)}`);
+    }
+    if (isMetricNumber(viewer.ortmWhite)) {
+      lines.push(`tunnel_viewer_slot_ortm_white_luma{${label}} ${Number(viewer.ortmWhite)}`);
+    }
+    if (isMetricNumber(viewer.ortmThreshold)) {
+      lines.push(`tunnel_viewer_slot_ortm_threshold_luma{${label}} ${Number(viewer.ortmThreshold)}`);
+    }
+    if (isMetricNumber(viewer.ortmContrast)) {
+      lines.push(`tunnel_viewer_slot_ortm_contrast_luma{${label}} ${Number(viewer.ortmContrast)}`);
+    }
+    if (isMetricNumber(viewer.ortmCandidateScale)) {
+      lines.push(`tunnel_viewer_slot_ortm_candidate_scale{${label}} ${Number(viewer.ortmCandidateScale)}`);
+    }
+    if (isMetricNumber(viewer.ortmCandidateDx)) {
+      lines.push(`tunnel_viewer_slot_ortm_candidate_dx_pixels{${label}} ${Number(viewer.ortmCandidateDx)}`);
+    }
+    if (isMetricNumber(viewer.ortmCandidateDy)) {
+      lines.push(`tunnel_viewer_slot_ortm_candidate_dy_pixels{${label}} ${Number(viewer.ortmCandidateDy)}`);
+    }
     if (isMetricNumber(viewer.fallback)) {
       lines.push(`tunnel_viewer_slot_fallback_ms{${label}} ${Number(viewer.fallback)}`);
     }

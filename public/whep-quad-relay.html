@@ -467,7 +467,7 @@
     <div id="tooltip" class="tooltip" hidden></div>
 
     <script>
-      const BUILD_VERSION = '2026-07-13-whep-quad-relay-from-direct';
+      const BUILD_VERSION = '2026-07-13-whep-quad-relay-ortm-quality';
       const appConfig = window.APP_CONFIG || {};
       const logEl = document.getElementById('log');
       const logPanelEl = document.getElementById('logPanel');
@@ -640,6 +640,15 @@
         return value >>> 0;
       }
 
+      function ortmMedian(values) {
+        if (!values.length) return NaN;
+        const sorted = [...values].sort((left, right) => left - right);
+        const middle = Math.floor(sorted.length / 2);
+        return sorted.length % 2
+          ? sorted[middle]
+          : (sorted[middle - 1] + sorted[middle]) / 2;
+      }
+
       function buildOrtmCandidates() {
         const candidates = [];
         for (const scale of ORTM_CONFIG.scales) {
@@ -720,8 +729,6 @@
           }
 
           const lumaGrid = Array.from({ length: ORTM_CONFIG.gridSize }, () => new Array(ORTM_CONFIG.gridSize).fill(255));
-          let minLuma = Infinity;
-          let maxLuma = -Infinity;
           let invalid = false;
 
           for (let row = 0; row < ORTM_CONFIG.gridSize && !invalid; row += 1) {
@@ -732,8 +739,6 @@
                 break;
               }
               lumaGrid[row][col] = luma;
-              minLuma = Math.min(minLuma, luma);
-              maxLuma = Math.max(maxLuma, luma);
             }
           }
 
@@ -741,8 +746,23 @@
             continue;
           }
 
-          const threshold = (minLuma + maxLuma) / 2;
-          const contrast = maxLuma - minLuma;
+          const finderBlackLumas = [];
+          const finderWhiteLumas = [];
+          for (let row = 0; row < ORTM_CONFIG.gridSize; row += 1) {
+            for (let col = 0; col < ORTM_CONFIG.gridSize; col += 1) {
+              if (!ortmInFinder(row, col)) continue;
+              const localRow = row < ORTM_CONFIG.finderSize ? row : row - (ORTM_CONFIG.gridSize - ORTM_CONFIG.finderSize);
+              const localCol = col < ORTM_CONFIG.finderSize ? col : col - (ORTM_CONFIG.gridSize - ORTM_CONFIG.finderSize);
+              const samples = ortmExpectedFinderBit(localRow, localCol) === 1
+                ? finderBlackLumas
+                : finderWhiteLumas;
+              samples.push(lumaGrid[row][col]);
+            }
+          }
+          const blackLevel = ortmMedian(finderBlackLumas);
+          const whiteLevel = ortmMedian(finderWhiteLumas);
+          const threshold = (blackLevel + whiteLevel) / 2;
+          const contrast = whiteLevel - blackLevel;
           const bitGrid = lumaGrid.map((row) => row.map((luma) => (luma < threshold ? 1 : 0)));
           let finderErrors = 0;
           let timingErrors = 0;
@@ -767,7 +787,7 @@
             }
           }
 
-          const score = finderErrors * 4 + timingErrors * 2 - contrast / 32;
+          const score = finderErrors * 4 + timingErrors * 2 - Math.max(contrast, 0) / 32;
           const failureBase = {
             ok: false,
             score,
@@ -775,6 +795,8 @@
             timing_errors: timingErrors,
             threshold,
             contrast,
+            black_level: blackLevel,
+            white_level: whiteLevel,
             candidate,
           };
 
@@ -854,6 +876,8 @@
             timing_errors: timingErrors,
             threshold,
             contrast,
+            black_level: blackLevel,
+            white_level: whiteLevel,
             candidate,
           };
         }
@@ -866,6 +890,8 @@
           timing_errors: null,
           threshold: null,
           contrast: null,
+          black_level: null,
+          white_level: null,
         };
       }
 
@@ -934,6 +960,15 @@
           ortmFrameSeq: null,
           ortmFrameSeqStalledSince: 0,
           ortmFrameSeqRepeatCount: 0,
+          ortmDecodeStats: {
+            attempts: 0,
+            successes: 0,
+            failures: 0,
+            crcFailures: 0,
+            structureFailures: 0,
+            lowContrastFailures: 0,
+            lastResult: null,
+          },
           lastMetricLogLine: null,
           lastChartSampleAt: 0,
           lastStallChartSampleAt: 0,
@@ -1101,6 +1136,11 @@
             `rtcBitrate=${formatMetricValue(state.rtcStats.bitrateKbps, 'kbps')}`,
             `rtcPacketsLost=${formatMetricValue(state.rtcStats.packetsLost, '')}`,
           ].join(' ');
+          const ortmDecode = state.ortmDecodeStats;
+          const ortmQuality = ortmDecode.lastResult || {};
+          const ortmSuccessRate = ortmDecode.attempts
+            ? (ortmDecode.successes / ortmDecode.attempts) * 100
+            : NaN;
           const line = [
             `slot=${name}`,
             `ice=${iceEl.textContent || 'idle'}`,
@@ -1110,6 +1150,22 @@
             `ortmSampleAge=${ortmSampleAgeEl.textContent || '--'}`,
             `ortmFrameSeq=${state.ortmFrameSeq ?? '--'}`,
             `ortmFrameStall=${state.ortmFrameSeqStalledSince > 0 ? Math.round(performance.now() - state.ortmFrameSeqStalledSince) : '--'}ms`,
+            `ortmDecodeAttempts=${ortmDecode.attempts}`,
+            `ortmDecodeSuccesses=${ortmDecode.successes}`,
+            `ortmDecodeFailures=${ortmDecode.failures}`,
+            `ortmDecodeSuccessRate=${Number.isFinite(ortmSuccessRate) ? ortmSuccessRate.toFixed(1) : '--'}`,
+            `ortmCrcFailures=${ortmDecode.crcFailures}`,
+            `ortmStructureFailures=${ortmDecode.structureFailures}`,
+            `ortmLowContrastFailures=${ortmDecode.lowContrastFailures}`,
+            `ortmFinderErrors=${ortmQuality.finder_errors ?? '--'}`,
+            `ortmTimingErrors=${ortmQuality.timing_errors ?? '--'}`,
+            `ortmBlack=${Number.isFinite(ortmQuality.black_level) ? ortmQuality.black_level.toFixed(1) : '--'}`,
+            `ortmWhite=${Number.isFinite(ortmQuality.white_level) ? ortmQuality.white_level.toFixed(1) : '--'}`,
+            `ortmThreshold=${Number.isFinite(ortmQuality.threshold) ? ortmQuality.threshold.toFixed(1) : '--'}`,
+            `ortmContrast=${Number.isFinite(ortmQuality.contrast) ? ortmQuality.contrast.toFixed(1) : '--'}`,
+            `ortmCandidateScale=${Number.isFinite(ortmQuality.candidate?.scale) ? ortmQuality.candidate.scale.toFixed(2) : '--'}`,
+            `ortmCandidateDx=${ortmQuality.candidate?.dx ?? '--'}`,
+            `ortmCandidateDy=${ortmQuality.candidate?.dy ?? '--'}`,
             `fallback=${fallbackLatencyEl.textContent || '--'}`,
             `upstream=${upstreamLatencyEl.textContent || '--'}`,
             `upstreamNet=${upstreamNetLatencyEl.textContent || '--'}`,
@@ -1158,6 +1214,15 @@
           state.ortmFrameSeq = null;
           state.ortmFrameSeqStalledSince = 0;
           state.ortmFrameSeqRepeatCount = 0;
+          state.ortmDecodeStats = {
+            attempts: 0,
+            successes: 0,
+            failures: 0,
+            crcFailures: 0,
+            structureFailures: 0,
+            lowContrastFailures: 0,
+            lastResult: null,
+          };
           state.lastMetricLogLine = null;
           state.decodeMode = ORTM_DECODE_MODE;
           state.lastChartSampleAt = 0;
@@ -1238,6 +1303,18 @@
           const avgDecodeMs = state.browserPerf.decodeMsTotal / state.browserPerf.count;
           browserCostEl.textContent = `${(avgDrawMs + avgReadbackMs + avgDecodeMs).toFixed(1)} ms`;
 
+          const ortmDecode = state.ortmDecodeStats;
+          ortmDecode.attempts += 1;
+          ortmDecode.lastResult = result;
+          if (result.ok) {
+            ortmDecode.successes += 1;
+          } else {
+            ortmDecode.failures += 1;
+            if (result.reason === 'crc-mismatch') ortmDecode.crcFailures += 1;
+            if (result.reason === 'structure-mismatch') ortmDecode.structureFailures += 1;
+            if (result.reason === 'low-contrast') ortmDecode.lowContrastFailures += 1;
+          }
+
           if (result.ok) {
             const nowPerf = performance.now();
             state.ortmLastSuccessAt = nowPerf;
@@ -1261,7 +1338,7 @@
               (((result.frame_seq - state.ortmLastLoggedFrameSeq) + 65536) % 65536) >= 30;
             if (shouldLogSuccess) {
               log(
-                `${name} ORTM ok seq=${result.frame_seq} latency=${Math.round(result.latency_ms)}ms finder=${result.finder_errors} timing=${result.timing_errors} contrast=${result.contrast.toFixed(1)}`
+                `${name} ORTM ok seq=${result.frame_seq} latency=${Math.round(result.latency_ms)}ms finder=${result.finder_errors} timing=${result.timing_errors} black=${result.black_level.toFixed(1)} white=${result.white_level.toFixed(1)} threshold=${result.threshold.toFixed(1)} contrast=${result.contrast.toFixed(1)} scale=${result.candidate.scale.toFixed(2)} dx=${result.candidate.dx} dy=${result.candidate.dy}`
               );
               state.ortmLastLoggedFrameSeq = result.frame_seq;
             }
@@ -1269,7 +1346,7 @@
           } else if (state.ortmLastFailureReason !== result.reason && performance.now() - state.ortmLastSuccessAt > 1500) {
             updateOrtmActivityMetrics();
             log(
-              `${name} ORTM fail reason=${result.reason} score=${Number.isFinite(result.score) ? result.score.toFixed(1) : 'inf'} finder=${result.finder_errors ?? '--'} timing=${result.timing_errors ?? '--'} contrast=${result.contrast == null ? '--' : result.contrast.toFixed(1)}`
+              `${name} ORTM fail reason=${result.reason} score=${Number.isFinite(result.score) ? result.score.toFixed(1) : 'inf'} finder=${result.finder_errors ?? '--'} timing=${result.timing_errors ?? '--'} black=${result.black_level == null ? '--' : result.black_level.toFixed(1)} white=${result.white_level == null ? '--' : result.white_level.toFixed(1)} threshold=${result.threshold == null ? '--' : result.threshold.toFixed(1)} contrast=${result.contrast == null ? '--' : result.contrast.toFixed(1)} scale=${result.candidate?.scale ?? '--'} dx=${result.candidate?.dx ?? '--'} dy=${result.candidate?.dy ?? '--'}`
             );
             state.ortmLastFailureReason = result.reason;
           } else {
