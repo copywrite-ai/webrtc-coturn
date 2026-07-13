@@ -244,43 +244,63 @@
       }
       .metrics {
         display: grid;
-        gap: 4px;
+        gap: 3px;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         flex: 0 0 auto;
-        padding: 6px;
+        padding: 4px 5px;
       }
       .metric {
         display: grid;
         align-content: start;
-        gap: 2px;
+        gap: 1px;
         min-width: 0;
-        padding: 5px 6px;
+        padding: 3px 4px;
         border-radius: 6px;
         background: #f8fafc;
         border: 1px solid rgba(148, 163, 184, 0.16);
       }
       .metric-label {
-        font-size: 9px;
+        font-size: 8px;
         color: var(--muted);
         text-transform: uppercase;
-        letter-spacing: 0.02em;
+        letter-spacing: 0;
       }
       .metric-value {
-        font-size: 12px;
+        font-size: 10px;
         font-weight: 600;
         color: var(--text);
       }
       .metric-sub {
-        font-size: 9px;
+        font-size: 8px;
         color: var(--muted);
         display: grid;
-        gap: 1px;
+        gap: 0;
       }
       .metric-sub strong {
         display: block;
-        font-size: 11px;
+        font-size: 9px;
         font-weight: 600;
         color: var(--text);
+      }
+      [data-tip] {
+        cursor: help;
+      }
+      .tooltip {
+        position: fixed;
+        z-index: 1000;
+        max-width: 280px;
+        padding: 6px 8px;
+        border: 1px solid rgba(15, 23, 42, 0.16);
+        border-radius: 6px;
+        background: rgba(15, 23, 42, 0.96);
+        color: #fff;
+        font-size: 10px;
+        line-height: 1.4;
+        pointer-events: none;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
+      }
+      .tooltip[hidden] {
+        display: none;
       }
       .chart-panel {
         display: flex;
@@ -352,7 +372,7 @@
               <h1>四路 Relay 播放</h1>
               <span class="badge" id="buildBadge">Build --</span>
             </div>
-            <p class="subtle">强制 relay 拉流，首屏同时观察四路视频、ORTM 和趋势。</p>
+            <p class="subtle">强制 TURN relay 拉流，首屏同时观察四路视频、近似 G2G 和趋势。</p>
           </div>
           <div class="toolbar-spacer"></div>
           <div class="actions">
@@ -398,24 +418,42 @@
             <div class="slot-footer">
               <div class="metrics">
                 <div class="metric">
-                  <span class="metric-label">ICE</span>
+                  <span class="metric-label" data-tip="WebRTC ICE 连接状态。connected 表示浏览器与 WHEP 服务端已建立媒体通路。">ICE</span>
                   <strong class="metric-value ice">idle</strong>
-                  <span class="metric-sub">分辨率 <strong class="resolution">--</strong></span>
+                  <span class="metric-sub">
+                    <span data-tip="当前 video element 实际接收到的视频帧尺寸。">分辨率</span>
+                    <strong class="resolution">--</strong>
+                    <span data-tip="浏览器 WebRTC inbound-rtp 统计中的当前视频帧率。">FPS</span>
+                    <strong class="fps-state">--</strong>
+                  </span>
                 </div>
                 <div class="metric">
-                  <span class="metric-label">ORTM</span>
+                  <span class="metric-label" data-tip="从发送端把 ORTM 时间码画进视频帧，到浏览器端解出该时间码的近似端到端延迟。">近似G2G</span>
                   <strong class="metric-value latency-ortm">--</strong>
-                  <span class="metric-sub">净ORTM <strong class="latency-ortm-net">--</strong></span>
+                  <span class="metric-sub">
+                    <span data-tip="近似G2G 扣除浏览器侧 draw/read/decode 观测开销后的估算值。">净G2G</span>
+                    <strong class="latency-ortm-net">--</strong>
+                  </span>
                 </div>
                 <div class="metric">
-                  <span class="metric-label">前段</span>
+                  <span class="metric-label" data-tip="近似G2G 扣除浏览器播放侧估算开销后的前段链路延迟，主要覆盖发送端、网络、服务端和 WebRTC 接收链路。">前段</span>
                   <strong class="metric-value latency-upstream">--</strong>
-                  <span class="metric-sub">净前段 <strong class="latency-upstream-net">--</strong></span>
+                  <span class="metric-sub">
+                    <span data-tip="前段延迟再扣除浏览器侧观测开销后的估算值。">净前段</span>
+                    <strong class="latency-upstream-net">--</strong>
+                  </span>
                 </div>
                 <div class="metric">
-                  <span class="metric-label">播放侧</span>
-                  <strong class="metric-value latency-fallback">--</strong>
-                  <span class="metric-sub">浏览器 <strong class="browser-cost">--</strong></span>
+                  <span class="metric-label" data-tip="浏览器 WebRTC 统计中的 freeze 和 pause 累计次数；大于 0 表示播放过程中曾检测到视频冻结或暂停。">Freeze</span>
+                  <strong class="metric-value freeze-state">0</strong>
+                  <span class="metric-sub">
+                    <strong class="latency-fallback" hidden>--</strong>
+                    <span data-tip="页面侧 drawImage、getImageData 和 ORTM 解码的平均观测开销。">浏览器</span>
+                    <strong class="browser-cost">--</strong>
+                    <span data-tip="距离上一次成功解出 ORTM 样本过去的时间；正常会随解码节流在几十到约 200ms 内波动。">样本</span>
+                    <strong class="ortm-sample-age">--</strong>
+                    <strong class="ortm-frame-state" hidden>--</strong>
+                  </span>
                 </div>
               </div>
               <div class="chart-panel">
@@ -426,15 +464,17 @@
         </div>
       </article>
     </template>
+    <div id="tooltip" class="tooltip" hidden></div>
 
     <script>
-      const BUILD_VERSION = '2026-07-11-whep-quad-relay-rtcstats-3';
+      const BUILD_VERSION = '2026-07-13-whep-quad-relay-from-direct';
       const appConfig = window.APP_CONFIG || {};
       const logEl = document.getElementById('log');
       const logPanelEl = document.getElementById('logPanel');
       const slotsEl = document.getElementById('slots');
       const template = document.getElementById('slotTemplate');
       const buildBadgeEl = document.getElementById('buildBadge');
+      const tooltipEl = document.getElementById('tooltip');
       const params = new URLSearchParams(location.search);
       buildBadgeEl.textContent = `Build ${BUILD_VERSION}`;
       const clientLogEndpoint = '/client-log';
@@ -446,23 +486,6 @@
         params.get('whep3') || '',
         params.get('whep4') || '',
       ];
-      const ORTM_CONFIG = {
-        x: 24,
-        y: 24,
-        cell: 12,
-        padding: 12,
-        gridSize: 32,
-        finderSize: 4,
-        timingIndex: 4,
-        scales: [1.0, 0.95, 1.05, 0.9, 1.1],
-        offsets: [0, -4, 4],
-      };
-      const ORTM_PAYLOAD_BITS = 4 + 16 + 32 + 16;
-      const ORTM_MAX_REASONABLE_LATENCY_MS = 5000;
-      const ORTM_DECODE_INTERVAL_MS = 500;
-      const ORTM_DECODE_MODE = 'rvfc';
-      const CHART_WINDOW_MS = 60000;
-      const CHART_AVG_WINDOW_MS = 10000;
 
       function splitTurnUrls(value) {
         return String(value || '')
@@ -499,11 +522,67 @@
         return [server];
       }
 
+      const ORTM_CONFIG = {
+        x: 24,
+        y: 24,
+        cell: 12,
+        padding: 12,
+        gridSize: 32,
+        finderSize: 4,
+        timingIndex: 4,
+        scales: [1.0, 0.95, 1.05, 0.9, 1.1, 2.0, 1.9, 2.1],
+        offsets: [0, -4, 4],
+      };
+      const ORTM_PAYLOAD_BITS = 4 + 16 + 32 + 16;
+      const ORTM_SUPPORTED_VERSION = 0;
+      const ORTM_MAX_REASONABLE_LATENCY_MS = 5000;
+      const ORTM_DECODE_INTERVAL_MS = 200;
+      const ORTM_DECODE_MODE = 'rvfc';
+      const ORTM_STALL_CHART_INTERVAL_MS = 250;
+      const ORTM_STALL_CHART_THRESHOLD_MS = 250;
+      const CHART_WINDOW_MS = 60000;
+      const CHART_AVG_WINDOW_MS = 10000;
+
       function log(message) {
         const line = `${new Date().toISOString()} ${message}`;
         logEl.textContent += `${line}\n`;
         logEl.scrollTop = logEl.scrollHeight;
         console.log(line);
+        queueClientLog({
+          group: 'connection',
+          level: /failed|error|disconnected/i.test(message) ? 'warn' : 'info',
+          message: line,
+        });
+      }
+
+      function positionTooltip(target) {
+        if (!tooltipEl || !target) return;
+        const rect = target.getBoundingClientRect();
+        const margin = 8;
+        tooltipEl.hidden = false;
+        const tooltipRect = tooltipEl.getBoundingClientRect();
+        let left = rect.left;
+        let top = rect.bottom + margin;
+        if (left + tooltipRect.width > window.innerWidth - margin) {
+          left = window.innerWidth - tooltipRect.width - margin;
+        }
+        if (top + tooltipRect.height > window.innerHeight - margin) {
+          top = rect.top - tooltipRect.height - margin;
+        }
+        tooltipEl.style.left = `${Math.max(margin, left)}px`;
+        tooltipEl.style.top = `${Math.max(margin, top)}px`;
+      }
+
+      function showTooltip(target) {
+        const text = target?.dataset?.tip;
+        if (!tooltipEl || !text) return;
+        tooltipEl.textContent = text;
+        positionTooltip(target);
+      }
+
+      function hideTooltip() {
+        if (!tooltipEl) return;
+        tooltipEl.hidden = true;
       }
 
       function queueClientLog(entry) {
@@ -588,7 +667,22 @@
 
       const ORTM_CANDIDATES = buildOrtmCandidates();
 
-      function ortmSampleCellLuma(imageData, frameWidth, frameHeight, candidate, row, col) {
+      function buildOrtmReadRoi() {
+        const minX = Math.floor(Math.min(...ORTM_CANDIDATES.map((candidate) => candidate.x)));
+        const minY = Math.floor(Math.min(...ORTM_CANDIDATES.map((candidate) => candidate.y)));
+        const maxX = Math.ceil(Math.max(...ORTM_CANDIDATES.map((candidate) => candidate.x + candidate.boxSize)));
+        const maxY = Math.ceil(Math.max(...ORTM_CANDIDATES.map((candidate) => candidate.y + candidate.boxSize)));
+        return {
+          x: Math.max(0, minX),
+          y: Math.max(0, minY),
+          width: Math.max(1, maxX - Math.max(0, minX)),
+          height: Math.max(1, maxY - Math.max(0, minY)),
+        };
+      }
+
+      const ORTM_READ_ROI = buildOrtmReadRoi();
+
+      function ortmSampleCellLuma(imageData, candidate, row, col, roiX = 0, roiY = 0) {
         const positions = [0.2, 0.5, 0.8];
         const originX = candidate.x + candidate.padding + col * candidate.cell;
         const originY = candidate.y + candidate.padding + row * candidate.cell;
@@ -596,12 +690,12 @@
         let count = 0;
         for (const px of positions) {
           for (const py of positions) {
-            const x = Math.round(originX + candidate.cell * px);
-            const y = Math.round(originY + candidate.cell * py);
-            if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) {
+            const x = Math.round(originX + candidate.cell * px) - roiX;
+            const y = Math.round(originY + candidate.cell * py) - roiY;
+            if (x < 0 || x >= imageData.width || y < 0 || y >= imageData.height) {
               continue;
             }
-            const offset = (y * frameWidth + x) * 4;
+            const offset = (y * imageData.width + x) * 4;
             const r = imageData.data[offset];
             const g = imageData.data[offset + 1];
             const b = imageData.data[offset + 2];
@@ -612,7 +706,7 @@
         return count ? total / count : NaN;
       }
 
-      function decodeOrtmFromImageData(imageData, frameWidth, frameHeight, nowMs) {
+      function decodeOrtmFromImageData(imageData, frameWidth, frameHeight, nowMs, roiX = 0, roiY = 0) {
         let bestFailure = null;
 
         for (const candidate of ORTM_CANDIDATES) {
@@ -632,7 +726,7 @@
 
           for (let row = 0; row < ORTM_CONFIG.gridSize && !invalid; row += 1) {
             for (let col = 0; col < ORTM_CONFIG.gridSize; col += 1) {
-              const luma = ortmSampleCellLuma(imageData, frameWidth, frameHeight, candidate, row, col);
+              const luma = ortmSampleCellLuma(imageData, candidate, row, col, roiX, roiY);
               if (!Number.isFinite(luma)) {
                 invalid = true;
                 break;
@@ -725,6 +819,14 @@
             timestampMs & 0xff,
           ]));
 
+          if (version !== ORTM_SUPPORTED_VERSION) {
+            const failure = { ...failureBase, reason: 'unsupported-version' };
+            if (!bestFailure || failure.score < bestFailure.score) {
+              bestFailure = failure;
+            }
+            continue;
+          }
+
           if (crc16 !== expectedCrc16) {
             const failure = { ...failureBase, reason: 'crc-mismatch' };
             if (!bestFailure || failure.score < bestFailure.score) {
@@ -797,12 +899,16 @@
         const stopBtn = node.querySelector('.stop');
         const iceEl = node.querySelector('.ice');
         const resolutionEl = node.querySelector('.resolution');
+        const fpsStateEl = node.querySelector('.fps-state');
         const ortmLatencyEl = node.querySelector('.latency-ortm');
         const ortmNetLatencyEl = node.querySelector('.latency-ortm-net');
+        const ortmSampleAgeEl = node.querySelector('.ortm-sample-age');
         const fallbackLatencyEl = node.querySelector('.latency-fallback');
         const upstreamLatencyEl = node.querySelector('.latency-upstream');
         const upstreamNetLatencyEl = node.querySelector('.latency-upstream-net');
         const browserCostEl = node.querySelector('.browser-cost');
+        const freezeStateEl = node.querySelector('.freeze-state');
+        const ortmFrameStateEl = node.querySelector('.ortm-frame-state');
         const chartCanvasEl = node.querySelector('.latency-chart');
         const videoEl = node.querySelector('video');
 
@@ -816,15 +922,21 @@
           sessionUrl: null,
           statsTimer: null,
           decodeTimer: null,
+          stallChartTimer: null,
           decodeFrameCallbackId: null,
           decodeCanvas: document.createElement('canvas'),
           decodeCtx: null,
           ortmLastSuccessAt: 0,
+          ortmLastAttemptAt: 0,
           ortmLastResult: null,
           ortmLastFailureReason: null,
           ortmLastLoggedFrameSeq: null,
+          ortmFrameSeq: null,
+          ortmFrameSeqStalledSince: 0,
+          ortmFrameSeqRepeatCount: 0,
           lastMetricLogLine: null,
           lastChartSampleAt: 0,
+          lastStallChartSampleAt: 0,
           chart: null,
           browserPerf: {
             count: 0,
@@ -834,6 +946,21 @@
           },
           rtcStats: {},
           previousInboundStats: null,
+          prefFreezeWatch: {
+            recentRecvGaps: [],
+            lastFreezeCount: null,
+            lastLoggedAt: 0,
+            lastReason: null,
+          },
+          rvfcStats: {
+            lastCallbackAt: 0,
+            gapMs: null,
+            presentationAgeMs: null,
+            displayLeadMs: null,
+            mediaTimeMs: null,
+            presentedFrames: null,
+            presentedDelta: null,
+          },
         };
         state.decodeCtx = state.decodeCanvas.getContext('2d', { willReadFrequently: true });
         state.chart = new window.RealtimeLatencyChart(chartCanvasEl, {
@@ -854,12 +981,78 @@
           state.chart?.resize();
         }
 
+        function formatMsText(value) {
+          if (!Number.isFinite(value)) return '--';
+          return `${Math.round(value)} ms`;
+        }
+
+        function updateOrtmActivityMetrics() {
+          const now = performance.now();
+          const sampleAgeMs = state.ortmLastSuccessAt > 0 ? now - state.ortmLastSuccessAt : NaN;
+          ortmSampleAgeEl.textContent = formatMsText(sampleAgeMs);
+
+          if (state.ortmFrameSeq == null) {
+            ortmFrameStateEl.textContent = '--';
+            return;
+          }
+
+          const stalledMs = state.ortmFrameSeqStalledSince > 0 ? now - state.ortmFrameSeqStalledSince : 0;
+          ortmFrameStateEl.textContent = `${state.ortmFrameSeq} / ${Math.round(stalledMs)} ms`;
+        }
+
+        function updateFreezeMetric() {
+          const freezeCount = state.rtcStats.freezeCount;
+          const pauseCount = state.rtcStats.pauseCount;
+          const freezeDurationMs = state.rtcStats.freezeDurationMs;
+          const pauseDurationMs = state.rtcStats.pauseDurationMs;
+          const totalCount =
+            (Number.isFinite(freezeCount) ? freezeCount : 0) +
+            (Number.isFinite(pauseCount) ? pauseCount : 0);
+          const totalDurationMs =
+            (Number.isFinite(freezeDurationMs) ? freezeDurationMs : 0) +
+            (Number.isFinite(pauseDurationMs) ? pauseDurationMs : 0);
+          freezeStateEl.textContent =
+            totalCount > 0 && totalDurationMs > 0
+              ? `${totalCount} / ${Math.round(totalDurationMs)} ms`
+              : `${totalCount}`;
+        }
+
+        function updateFpsMetric() {
+          const fpsValue = state.rtcStats.framesPerSecond;
+          const recvFpsValue = state.rtcStats.framesReceivedPerSecond;
+          const displayValue = Number.isFinite(fpsValue) ? fpsValue : recvFpsValue;
+          fpsStateEl.textContent = Number.isFinite(displayValue)
+            ? `${Math.round(displayValue)}`
+            : '--';
+        }
+
         function pushChartSample(value) {
           if (!Number.isFinite(value)) return;
           const now = performance.now();
           if (now - state.lastChartSampleAt < 250) return;
           state.lastChartSampleAt = now;
           state.chart?.push(value, now, false);
+        }
+
+        function pushStallChartSample() {
+          if (!state.ortmLastResult || state.ortmFrameSeq == null || !state.ortmFrameSeqStalledSince) {
+            return;
+          }
+          const nowPerf = performance.now();
+          const stalledMs = nowPerf - state.ortmFrameSeqStalledSince;
+          if (stalledMs < ORTM_STALL_CHART_THRESHOLD_MS) {
+            return;
+          }
+          if (nowPerf - state.lastStallChartSampleAt < ORTM_STALL_CHART_INTERVAL_MS) {
+            return;
+          }
+          const syntheticLatencyMs = ((Date.now() >>> 0) - (state.ortmLastResult.timestamp_ms >>> 0)) >>> 0;
+          if (!Number.isFinite(syntheticLatencyMs) || syntheticLatencyMs >= ORTM_MAX_REASONABLE_LATENCY_MS) {
+            return;
+          }
+          state.lastStallChartSampleAt = nowPerf;
+          state.lastChartSampleAt = nowPerf;
+          state.chart?.push(syntheticLatencyMs, nowPerf, true);
         }
 
         function updateDerivedLatency() {
@@ -892,8 +1085,18 @@
             : 'browser=-- draw=-- read=-- decode=--';
           const rtcStats = [
             `rtcJitter=${formatMetricValue(state.rtcStats.jitterBufferMs, 'ms')}`,
+            `rtcJbTarget=${formatMetricValue(state.rtcStats.jitterBufferTargetMs, 'ms')}`,
+            `rtcJbMin=${formatMetricValue(state.rtcStats.jitterBufferMinimumMs, 'ms')}`,
             `rtcDecode=${formatMetricValue(state.rtcStats.decodeMs, 'ms')}`,
             `rtcFps=${formatMetricValue(state.rtcStats.framesPerSecond, '')}`,
+            `rtcRecvFps=${formatMetricValue(state.rtcStats.framesReceivedPerSecond, '')}`,
+            `rtcDecFps=${formatMetricValue(state.rtcStats.framesDecodedPerSecond, '')}`,
+            `rtcRecvGap=${formatMetricValue(state.rtcStats.receiveDecodeGap, '')}`,
+            `rtcFrameInt=${formatMetricValue(state.rtcStats.interFrameDelayMs, 'ms')}`,
+            `rtcFreezeCount=${formatMetricValue(state.rtcStats.freezeCount, '')}`,
+            `rtcFreezeDur=${formatMetricValue(state.rtcStats.freezeDurationMs, 'ms')}`,
+            `rtcPauseCount=${formatMetricValue(state.rtcStats.pauseCount, '')}`,
+            `rtcPauseDur=${formatMetricValue(state.rtcStats.pauseDurationMs, 'ms')}`,
             `rtcDrop=${formatMetricValue(state.rtcStats.framesDropped, '')}`,
             `rtcBitrate=${formatMetricValue(state.rtcStats.bitrateKbps, 'kbps')}`,
             `rtcPacketsLost=${formatMetricValue(state.rtcStats.packetsLost, '')}`,
@@ -904,10 +1107,18 @@
             `resolution=${resolutionEl.textContent || '--'}`,
             `ortm=${ortmLatencyEl.textContent || '--'}`,
             `ortmNet=${ortmNetLatencyEl.textContent || '--'}`,
+            `ortmSampleAge=${ortmSampleAgeEl.textContent || '--'}`,
+            `ortmFrameSeq=${state.ortmFrameSeq ?? '--'}`,
+            `ortmFrameStall=${state.ortmFrameSeqStalledSince > 0 ? Math.round(performance.now() - state.ortmFrameSeqStalledSince) : '--'}ms`,
             `fallback=${fallbackLatencyEl.textContent || '--'}`,
             `upstream=${upstreamLatencyEl.textContent || '--'}`,
             `upstreamNet=${upstreamNetLatencyEl.textContent || '--'}`,
             `decodeMode=${state.decodeMode || ORTM_DECODE_MODE}`,
+            `rvfcGap=${formatMetricValue(state.rvfcStats.gapMs, 'ms')}`,
+            `rvfcPresentationAge=${formatMetricValue(state.rvfcStats.presentationAgeMs, 'ms')}`,
+            `rvfcLead=${formatMetricValue(state.rvfcStats.displayLeadMs, 'ms')}`,
+            `rvfcPresented=${formatMetricValue(state.rvfcStats.presentedFrames, '')}`,
+            `rvfcPresentedDelta=${formatMetricValue(state.rvfcStats.presentedDelta, '')}`,
             browserPerf,
             rtcStats,
             `status=${statusEl.textContent || '--'}`,
@@ -928,6 +1139,10 @@
             clearInterval(state.decodeTimer);
             state.decodeTimer = null;
           }
+          if (state.stallChartTimer) {
+            clearInterval(state.stallChartTimer);
+            state.stallChartTimer = null;
+          }
           if (
             state.decodeFrameCallbackId != null &&
             typeof videoEl.cancelVideoFrameCallback === 'function'
@@ -936,12 +1151,17 @@
           }
           state.decodeFrameCallbackId = null;
           state.ortmLastSuccessAt = 0;
+          state.ortmLastAttemptAt = 0;
           state.ortmLastResult = null;
           state.ortmLastFailureReason = null;
           state.ortmLastLoggedFrameSeq = null;
+          state.ortmFrameSeq = null;
+          state.ortmFrameSeqStalledSince = 0;
+          state.ortmFrameSeqRepeatCount = 0;
           state.lastMetricLogLine = null;
           state.decodeMode = ORTM_DECODE_MODE;
           state.lastChartSampleAt = 0;
+          state.lastStallChartSampleAt = 0;
           state.chart?.clear();
           state.browserPerf = {
             count: 0,
@@ -951,15 +1171,35 @@
           };
           state.rtcStats = {};
           state.previousInboundStats = null;
+          state.prefFreezeWatch = {
+            recentRecvGaps: [],
+            lastFreezeCount: null,
+            lastLoggedAt: 0,
+            lastReason: null,
+          };
+          state.rvfcStats = {
+            lastCallbackAt: 0,
+            gapMs: null,
+            presentationAgeMs: null,
+            displayLeadMs: null,
+            mediaTimeMs: null,
+            presentedFrames: null,
+            presentedDelta: null,
+          };
           ortmLatencyEl.textContent = '--';
           ortmNetLatencyEl.textContent = '--';
+          ortmSampleAgeEl.textContent = '--';
+          fpsStateEl.textContent = '--';
           upstreamLatencyEl.textContent = '--';
           upstreamNetLatencyEl.textContent = '--';
           browserCostEl.textContent = '--';
+          freezeStateEl.textContent = '0';
+          ortmFrameStateEl.textContent = '--';
           renderChart();
         }
 
         function updateLatencyFromOrtm() {
+          state.ortmLastAttemptAt = performance.now();
           if (
             !state.decodeCtx ||
             !videoEl.videoWidth ||
@@ -970,14 +1210,21 @@
           }
           const width = videoEl.videoWidth;
           const height = videoEl.videoHeight;
-          if (state.decodeCanvas.width !== width) state.decodeCanvas.width = width;
-          if (state.decodeCanvas.height !== height) state.decodeCanvas.height = height;
+          const roiX = ORTM_READ_ROI.x;
+          const roiY = ORTM_READ_ROI.y;
+          const roiWidth = Math.min(ORTM_READ_ROI.width, Math.max(0, width - roiX));
+          const roiHeight = Math.min(ORTM_READ_ROI.height, Math.max(0, height - roiY));
+          if (roiWidth <= 0 || roiHeight <= 0) {
+            return;
+          }
+          if (state.decodeCanvas.width !== roiWidth) state.decodeCanvas.width = roiWidth;
+          if (state.decodeCanvas.height !== roiHeight) state.decodeCanvas.height = roiHeight;
           const drawStartedAt = performance.now();
-          state.decodeCtx.drawImage(videoEl, 0, 0, width, height);
+          state.decodeCtx.drawImage(videoEl, roiX, roiY, roiWidth, roiHeight, 0, 0, roiWidth, roiHeight);
           const drawFinishedAt = performance.now();
-          const imageData = state.decodeCtx.getImageData(0, 0, width, height);
+          const imageData = state.decodeCtx.getImageData(0, 0, roiWidth, roiHeight);
           const readbackFinishedAt = performance.now();
-          const result = decodeOrtmFromImageData(imageData, width, height, Date.now());
+          const result = decodeOrtmFromImageData(imageData, width, height, Date.now(), roiX, roiY);
           const decodeFinishedAt = performance.now();
           const drawMs = drawFinishedAt - drawStartedAt;
           const readbackMs = readbackFinishedAt - drawFinishedAt;
@@ -992,11 +1239,23 @@
           browserCostEl.textContent = `${(avgDrawMs + avgReadbackMs + avgDecodeMs).toFixed(1)} ms`;
 
           if (result.ok) {
-            state.ortmLastSuccessAt = performance.now();
+            const nowPerf = performance.now();
+            state.ortmLastSuccessAt = nowPerf;
             state.ortmLastResult = result;
+            if (state.ortmFrameSeq === result.frame_seq) {
+              if (!state.ortmFrameSeqStalledSince) {
+                state.ortmFrameSeqStalledSince = nowPerf;
+              }
+              state.ortmFrameSeqRepeatCount += 1;
+            } else {
+              state.ortmFrameSeq = result.frame_seq;
+              state.ortmFrameSeqStalledSince = nowPerf;
+              state.ortmFrameSeqRepeatCount = 0;
+            }
             ortmLatencyEl.textContent = `${Math.round(result.latency_ms)} ms`;
             pushChartSample(result.latency_ms);
             updateDerivedLatency();
+            updateOrtmActivityMetrics();
             const shouldLogSuccess =
               state.ortmLastLoggedFrameSeq == null ||
               (((result.frame_seq - state.ortmLastLoggedFrameSeq) + 65536) % 65536) >= 30;
@@ -1008,10 +1267,13 @@
             }
             state.ortmLastFailureReason = null;
           } else if (state.ortmLastFailureReason !== result.reason && performance.now() - state.ortmLastSuccessAt > 1500) {
+            updateOrtmActivityMetrics();
             log(
               `${name} ORTM fail reason=${result.reason} score=${Number.isFinite(result.score) ? result.score.toFixed(1) : 'inf'} finder=${result.finder_errors ?? '--'} timing=${result.timing_errors ?? '--'} contrast=${result.contrast == null ? '--' : result.contrast.toFixed(1)}`
             );
             state.ortmLastFailureReason = result.reason;
+          } else {
+            updateOrtmActivityMetrics();
           }
         }
 
@@ -1021,16 +1283,52 @@
             ORTM_DECODE_MODE === 'rvfc' &&
             typeof videoEl.requestVideoFrameCallback === 'function'
           ) ? 'rvfc' : 'interval';
+          state.stallChartTimer = setInterval(() => {
+            pushStallChartSample();
+            updateOrtmActivityMetrics();
+          }, ORTM_STALL_CHART_INTERVAL_MS);
           if (state.decodeMode === 'rvfc') {
-            const onVideoFrame = () => {
+            const onVideoFrame = (_now, metadata) => {
               state.decodeFrameCallbackId = null;
-              try {
-                updateLatencyFromOrtm();
-              } catch (error) {
-                const reason = `decode-error:${error.message}`;
-                if (state.ortmLastFailureReason !== reason) {
-                  state.ortmLastFailureReason = reason;
-                  log(`${name} ORTM decode error: ${error.message}`);
+              const callbackNow = performance.now();
+              if (state.rvfcStats.lastCallbackAt > 0) {
+                state.rvfcStats.gapMs = callbackNow - state.rvfcStats.lastCallbackAt;
+              }
+              state.rvfcStats.lastCallbackAt = callbackNow;
+              if (metadata && Number.isFinite(metadata.presentationTime)) {
+                state.rvfcStats.presentationAgeMs = callbackNow - metadata.presentationTime;
+              } else {
+                state.rvfcStats.presentationAgeMs = null;
+              }
+              if (metadata && Number.isFinite(metadata.expectedDisplayTime)) {
+                state.rvfcStats.displayLeadMs = metadata.expectedDisplayTime - callbackNow;
+              } else {
+                state.rvfcStats.displayLeadMs = null;
+              }
+              if (metadata && Number.isFinite(metadata.mediaTime)) {
+                state.rvfcStats.mediaTimeMs = metadata.mediaTime * 1000;
+              } else {
+                state.rvfcStats.mediaTimeMs = null;
+              }
+              if (metadata && Number.isFinite(metadata.presentedFrames)) {
+                state.rvfcStats.presentedDelta =
+                  state.rvfcStats.presentedFrames != null
+                    ? metadata.presentedFrames - state.rvfcStats.presentedFrames
+                    : null;
+                state.rvfcStats.presentedFrames = metadata.presentedFrames;
+              } else {
+                state.rvfcStats.presentedDelta = null;
+                state.rvfcStats.presentedFrames = null;
+              }
+              if (callbackNow - state.ortmLastAttemptAt >= ORTM_DECODE_INTERVAL_MS) {
+                try {
+                  updateLatencyFromOrtm();
+                } catch (error) {
+                  const reason = `decode-error:${error.message}`;
+                  if (state.ortmLastFailureReason !== reason) {
+                    state.ortmLastFailureReason = reason;
+                    log(`${name} ORTM decode error: ${error.message}`);
+                  }
                 }
               }
               if (state.pc && videoEl.srcObject) {
@@ -1075,12 +1373,16 @@
           videoEl.srcObject = null;
           iceEl.textContent = 'idle';
           resolutionEl.textContent = '--';
+          fpsStateEl.textContent = '--';
           ortmLatencyEl.textContent = '--';
           ortmNetLatencyEl.textContent = '--';
           fallbackLatencyEl.textContent = '--';
           upstreamLatencyEl.textContent = '--';
           upstreamNetLatencyEl.textContent = '--';
           browserCostEl.textContent = '--';
+          freezeStateEl.textContent = '0';
+          ortmSampleAgeEl.textContent = '--';
+          ortmFrameStateEl.textContent = '--';
           state.lastMetricLogLine = null;
           setStatus('stopped');
           renderChart();
@@ -1096,12 +1398,6 @@
             return;
           }
 
-          if (!relayConfig.urls.length) {
-            setStatus('missing turn');
-            log(`${name} missing TURN config`);
-            return;
-          }
-
           const pc = new RTCPeerConnection({
             iceServers: parseIceServers(),
             iceTransportPolicy: 'relay',
@@ -1109,6 +1405,9 @@
           state.pc = pc;
           setStatus('connecting');
           log(`${name} start url=${whepUrl} relayPreset=${relayConfig.presetName || 'default'} turnUrls=${relayConfig.urls.join(',')}`);
+          log(
+            `${name} browser ua=${navigator.userAgent} platform=${navigator.userAgentData?.platform || navigator.platform || 'unknown'}`
+          );
 
           pc.addTransceiver('video', { direction: 'recvonly' });
 
@@ -1206,6 +1505,8 @@
                 }
               });
               updateRtcStats(inbound);
+              updateFpsMetric();
+              updateFreezeMetric();
               if (
                 state.ortmLastResult &&
                 performance.now() - state.ortmLastSuccessAt < 1500 &&
@@ -1215,6 +1516,7 @@
               } else {
                 ortmLatencyEl.textContent = '--';
               }
+              updateOrtmActivityMetrics();
               if (
                 inbound &&
                 typeof inbound.estimatedPlayoutTimestamp === 'number' &&
@@ -1238,6 +1540,7 @@
               emitMetricLog();
             } catch (error) {
               fallbackLatencyEl.textContent = 'err';
+              updateOrtmActivityMetrics();
               updateDerivedLatency();
               emitMetricLog();
             }
@@ -1254,6 +1557,68 @@
           return Number.isFinite(value) ? value : null;
         }
 
+        function maybeLogPreFreeze(rtcStats) {
+          if (!rtcStats) return;
+          const watch = state.prefFreezeWatch;
+          const now = performance.now();
+
+          if (Number.isFinite(rtcStats.receiveDecodeGap)) {
+            watch.recentRecvGaps.push(rtcStats.receiveDecodeGap);
+            if (watch.recentRecvGaps.length > 4) {
+              watch.recentRecvGaps.shift();
+            }
+          }
+
+          const gaps = watch.recentRecvGaps;
+          const gapRising =
+            gaps.length >= 4 &&
+            gaps[1] > gaps[0] &&
+            gaps[2] > gaps[1] &&
+            gaps[3] > gaps[2];
+          const decodeLagging =
+            Number.isFinite(rtcStats.framesReceivedPerSecond) &&
+            Number.isFinite(rtcStats.framesDecodedPerSecond) &&
+            rtcStats.framesReceivedPerSecond - rtcStats.framesDecodedPerSecond >= 5;
+          const freezeAdvanced =
+            Number.isFinite(rtcStats.freezeCount) &&
+            watch.lastFreezeCount != null &&
+            rtcStats.freezeCount > watch.lastFreezeCount;
+
+          let reason = null;
+          if (freezeAdvanced) {
+            reason = 'freeze-count-advanced';
+          } else if (gapRising) {
+            reason = 'recv-gap-rising';
+          } else if (decodeLagging) {
+            reason = 'decode-lagging';
+          }
+
+          if (
+            reason &&
+            (watch.lastReason !== reason || now - watch.lastLoggedAt >= 3000)
+          ) {
+            watch.lastReason = reason;
+            watch.lastLoggedAt = now;
+            queueClientLog({
+              group: 'signal',
+              level: 'warn',
+              message:
+                `${name} pre-freeze reason=${reason} ` +
+                `recvGap=${formatMetricValue(rtcStats.receiveDecodeGap, '')} ` +
+                `recvFps=${formatMetricValue(rtcStats.framesReceivedPerSecond, '')} ` +
+                `decFps=${formatMetricValue(rtcStats.framesDecodedPerSecond, '')} ` +
+                `freezeCount=${formatMetricValue(rtcStats.freezeCount, '')} ` +
+                `freezeDur=${formatMetricValue(rtcStats.freezeDurationMs, 'ms')} ` +
+                `jbTarget=${formatMetricValue(rtcStats.jitterBufferTargetMs, 'ms')} ` +
+                `jitter=${formatMetricValue(rtcStats.jitterBufferMs, 'ms')}`
+            });
+          }
+
+          if (Number.isFinite(rtcStats.freezeCount)) {
+            watch.lastFreezeCount = rtcStats.freezeCount;
+          }
+        }
+
         function updateRtcStats(inbound) {
           if (!inbound) {
             state.rtcStats = {};
@@ -1265,8 +1630,16 @@
             timestamp: numberOrNull(inbound.timestamp),
             bytesReceived: numberOrNull(inbound.bytesReceived),
             jitterBufferDelay: numberOrNull(inbound.jitterBufferDelay),
+            jitterBufferTargetDelay: numberOrNull(inbound.jitterBufferTargetDelay),
+            jitterBufferMinimumDelay: numberOrNull(inbound.jitterBufferMinimumDelay),
             jitterBufferEmittedCount: numberOrNull(inbound.jitterBufferEmittedCount),
             totalDecodeTime: numberOrNull(inbound.totalDecodeTime),
+            totalInterFrameDelay: numberOrNull(inbound.totalInterFrameDelay),
+            totalFreezesDuration: numberOrNull(inbound.totalFreezesDuration),
+            totalPausesDuration: numberOrNull(inbound.totalPausesDuration),
+            freezeCount: numberOrNull(inbound.freezeCount),
+            pauseCount: numberOrNull(inbound.pauseCount),
+            framesReceived: numberOrNull(inbound.framesReceived),
             framesDecoded: numberOrNull(inbound.framesDecoded),
           };
           const previous = state.previousInboundStats;
@@ -1274,12 +1647,27 @@
             framesPerSecond: numberOrNull(inbound.framesPerSecond),
             framesDropped: numberOrNull(inbound.framesDropped),
             packetsLost: numberOrNull(inbound.packetsLost),
+            freezeCount: numberOrNull(inbound.freezeCount),
+            pauseCount: numberOrNull(inbound.pauseCount),
           };
+
+          if (current.framesReceived != null && current.framesDecoded != null) {
+            rtcStats.receiveDecodeGap = current.framesReceived - current.framesDecoded;
+          }
+          if (current.jitterBufferMinimumDelay != null) {
+            rtcStats.jitterBufferMinimumMs = current.jitterBufferMinimumDelay * 1000;
+          }
 
           if (previous && current.timestamp != null && previous.timestamp != null) {
             const elapsedSeconds = (current.timestamp - previous.timestamp) / 1000;
             if (elapsedSeconds > 0 && current.bytesReceived != null && previous.bytesReceived != null) {
               rtcStats.bitrateKbps = ((current.bytesReceived - previous.bytesReceived) * 8) / elapsedSeconds / 1000;
+            }
+            if (elapsedSeconds > 0 && current.framesReceived != null && previous.framesReceived != null) {
+              rtcStats.framesReceivedPerSecond = (current.framesReceived - previous.framesReceived) / elapsedSeconds;
+            }
+            if (elapsedSeconds > 0 && current.framesDecoded != null && previous.framesDecoded != null) {
+              rtcStats.framesDecodedPerSecond = (current.framesDecoded - previous.framesDecoded) / elapsedSeconds;
             }
             if (
               current.jitterBufferDelay != null &&
@@ -1290,6 +1678,12 @@
               const emittedDelta = current.jitterBufferEmittedCount - previous.jitterBufferEmittedCount;
               if (emittedDelta > 0) {
                 rtcStats.jitterBufferMs = ((current.jitterBufferDelay - previous.jitterBufferDelay) / emittedDelta) * 1000;
+                if (
+                  current.jitterBufferTargetDelay != null &&
+                  previous.jitterBufferTargetDelay != null
+                ) {
+                  rtcStats.jitterBufferTargetMs = ((current.jitterBufferTargetDelay - previous.jitterBufferTargetDelay) / emittedDelta) * 1000;
+                }
               }
             }
             if (
@@ -1303,10 +1697,34 @@
                 rtcStats.decodeMs = ((current.totalDecodeTime - previous.totalDecodeTime) / decodedDelta) * 1000;
               }
             }
+            if (
+              current.totalInterFrameDelay != null &&
+              previous.totalInterFrameDelay != null &&
+              current.framesDecoded != null &&
+              previous.framesDecoded != null
+            ) {
+              const decodedDelta = current.framesDecoded - previous.framesDecoded;
+              if (decodedDelta > 0) {
+                rtcStats.interFrameDelayMs = ((current.totalInterFrameDelay - previous.totalInterFrameDelay) / decodedDelta) * 1000;
+              }
+            }
+            if (
+              current.totalFreezesDuration != null &&
+              previous.totalFreezesDuration != null
+            ) {
+              rtcStats.freezeDurationMs = (current.totalFreezesDuration - previous.totalFreezesDuration) * 1000;
+            }
+            if (
+              current.totalPausesDuration != null &&
+              previous.totalPausesDuration != null
+            ) {
+              rtcStats.pauseDurationMs = (current.totalPausesDuration - previous.totalPausesDuration) * 1000;
+            }
           }
 
           state.previousInboundStats = current;
           state.rtcStats = rtcStats;
+          maybeLogPreFreeze(rtcStats);
         }
 
         startBtn.addEventListener('click', async () => {
@@ -1358,7 +1776,30 @@
         logPanelEl.open = !logPanelEl.open;
       });
 
+      document.addEventListener('mouseover', (event) => {
+        const target = event.target.closest('[data-tip]');
+        if (target) {
+          showTooltip(target);
+        }
+      });
+
+      document.addEventListener('mousemove', (event) => {
+        const target = event.target.closest('[data-tip]');
+        if (target && !tooltipEl.hidden) {
+          positionTooltip(target);
+        }
+      });
+
+      document.addEventListener('mouseout', (event) => {
+        if (!event.target.closest('[data-tip]')) return;
+        const nextTarget = event.relatedTarget?.closest?.('[data-tip]');
+        if (!nextTarget) {
+          hideTooltip();
+        }
+      });
+
       window.addEventListener('resize', () => {
+        hideTooltip();
         slots.forEach((slot) => {
           if (typeof slot.renderChart === 'function') {
             slot.renderChart();

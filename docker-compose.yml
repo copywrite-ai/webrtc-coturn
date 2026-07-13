@@ -78,6 +78,28 @@ services:
     ports:
       - "${MONITOR_PORT:-9010}:${MONITOR_PORT:-9010}"
 
+  derp-latency-exporter:
+    profiles:
+      - derp
+    build:
+      context: ./docker/derp-latency-exporter
+    image: derp-latency-exporter:local
+    container_name: derp-latency-exporter
+    restart: unless-stopped
+    environment:
+      DERP_EXPORTER_PORT: "${DERP_EXPORTER_PORT:-9020}"
+      DERP_NETCHECK_INTERVAL_MS: "${DERP_NETCHECK_INTERVAL_MS:-30000}"
+      DERP_NETCHECK_TIMEOUT_MS: "${DERP_NETCHECK_TIMEOUT_MS:-20000}"
+      DERP_REGION_ALLOWLIST: "${DERP_REGION_ALLOWLIST:-900}"
+      TS_SOCKET: "${TS_SOCKET:-/tmp/tailscaled.sock}"
+      TAILSCALE_AUTHKEY: "${TAILSCALE_AUTHKEY:-}"
+      TAILSCALE_HOSTNAME: "${TAILSCALE_HOSTNAME:-derp-latency-exporter}"
+      TAILSCALE_UP_EXTRA_ARGS: "${TAILSCALE_UP_EXTRA_ARGS:---reset}"
+    volumes:
+      - derp-tailscale-state:/var/lib/tailscale
+    ports:
+      - "${DERP_EXPORTER_PORT:-9020}:${DERP_EXPORTER_PORT:-9020}"
+
   prometheus:
     image: prom/prometheus:v3.5.0
     container_name: tunnel-prometheus
@@ -117,3 +139,4 @@ services:
 volumes:
   prometheus-data:
   grafana-data:
+  derp-tailscale-state:

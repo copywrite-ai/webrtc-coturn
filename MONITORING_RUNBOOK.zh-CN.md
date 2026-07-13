@@ -122,3 +122,68 @@ webrtcICEServers2: []
 ```
 
 因此 direct 播放时浏览器侧和 MediaMTX 服务端都不会主动使用 coturn。
+## DERP 延迟 Exporter
+
+用于轻量记录本机到 Tailscale DERP region 的 netcheck 延迟。Exporter 不在 Prometheus scrape 时实时探测，而是按固定间隔缓存一次 `tailscale netcheck --format json` 结果，降低观测扰动。
+
+### 指标
+
+- `derp_region_latency_ms{region,ip_version}`：本机到 DERP region 的 RTT，单位 ms。
+- `derp_preferred_region_id`：当前首选 DERP region。
+- `derp_region_allowlist_info{region}`：当前 exporter 配置观测的 DERP region。
+- `derp_netcheck_up`：最近一次 netcheck 是否成功。
+- `derp_netcheck_duration_seconds`：最近一次 netcheck 耗时。
+- `derp_netcheck_udp` / `derp_netcheck_ipv4` / `derp_netcheck_ipv6`：本机网络能力探测结果。
+
+### 启动
+
+默认只观测自定义 Aliyun DERP region `900`。Docker 版 exporter 会在容器内启动独立的 `tailscaled`，使用 userspace networking 加入 tailnet 后再执行 netcheck。
+
+```bash
+TAILSCALE_AUTHKEY=tskey-auth-xxx \
+docker compose --profile derp up -d --build derp-latency-exporter
+```
+
+默认 hostname 是 `derp-latency-exporter`，可以覆盖：
+
+```bash
+TAILSCALE_AUTHKEY=tskey-auth-xxx \
+TAILSCALE_HOSTNAME=derp-latency-exporter-peng-mbp14 \
+docker compose --profile derp up -d --build derp-latency-exporter
+```
+
+如果自定义 DERP region ID 不是 `900`：
+
+```bash
+DERP_REGION_ALLOWLIST=900,901 \
+docker compose --profile derp up -d --build derp-latency-exporter
+```
+
+本地验证：
+
+```bash
+curl -fsS http://127.0.0.1:9020/metrics | rg 'derp_region_latency_ms|derp_region_allowlist_info|derp_preferred_region_id|derp_netcheck_up'
+```
+
+### Prometheus
+
+`prometheus/prometheus.yml` 已增加：
+
+```yaml
+- job_name: derp-latency-exporter
+  metrics_path: /metrics
+  scheme: http
+  static_configs:
+    - targets:
+        - derp-latency-exporter:9020
+```
+
+启动 exporter 后，重载或重启 Prometheus：
+
+```bash
+docker restart tunnel-prometheus
+```
+
+### 注意
+
+容器会作为一个独立 Tailscale node 出现在 tailnet 中。首次启动需要 `TAILSCALE_AUTHKEY`；后续状态保存在 Docker volume `derp-tailscale-state`，一般不需要重复传 auth key。

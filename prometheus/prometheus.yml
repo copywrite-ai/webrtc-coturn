@@ -19,3 +19,10 @@ scrape_configs:
     static_configs:
       - targets:
           - monitor:9010
+
+  - job_name: derp-latency-exporter
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - derp-latency-exporter:9020
