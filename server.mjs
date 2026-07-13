@@ -351,7 +351,10 @@ const server = createServer(async (req, res) => {
     const filePath = join(PUBLIC_DIR, url);
     const data = await readFile(filePath);
     const mime = MIME[extname(filePath)] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': mime });
+    res.writeHead(200, {
+      'Content-Type': mime,
+      'Cache-Control': 'no-store',
+    });
     res.end(data);
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });

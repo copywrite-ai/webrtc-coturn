@@ -41,12 +41,13 @@ webrtcAddress: :8889
 webrtcEncryption: false
 webrtcAllowOrigins: ["*"]
 webrtcLocalUDPAddress: :8189
-webrtcLocalTCPAddress: ""
+webrtcLocalTCPAddress: :8189
 webrtcIPsFromInterfaces: false
 webrtcIPsFromInterfacesList: []
 webrtcAdditionalHosts:
   - 127.0.0.1
-  - peng-mbp14.li-adder.ts.net
+  - 192.168.1.214
+  - 100.85.53.87
 
 # MediaMTX also needs TURN on the server side; browser-only ICE config is not enough for WHEP.
 # These values should match the TURN service actually used by the demo web app.

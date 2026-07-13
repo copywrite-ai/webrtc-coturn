@@ -41,14 +41,13 @@ webrtcAddress: :8889
 webrtcEncryption: false
 webrtcAllowOrigins: ["*"]
 webrtcLocalUDPAddress: :8189
-webrtcLocalTCPAddress: ""
+webrtcLocalTCPAddress: :8189
 webrtcIPsFromInterfaces: false
 webrtcIPsFromInterfacesList: []
 webrtcAdditionalHosts:
   - 127.0.0.1
-  - localhost
-  - mediamtx
-  - peng-mbp14.li-adder.ts.net
+  - 192.168.1.214
+  - 100.85.53.87
 
 # Direct/local profile: do not configure server-side STUN/TURN.
 # This keeps WHEP direct tests from touching coturn.
