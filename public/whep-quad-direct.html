@@ -465,8 +465,10 @@
     </template>
     <div id="tooltip" class="tooltip" hidden></div>
 
-    <script>
-      const BUILD_VERSION = '2026-07-13-whep-quad-direct-ortm-quality';
+    <script type="module">
+      import { DEFAULT_RASTER_PROFILE, buildReadRoi, decodeRgbaImage } from './vendor/ortm/raster.js';
+
+      const BUILD_VERSION = '2026-07-21-ortm-v0.1.0';
       const logEl = document.getElementById('log');
       const logPanelEl = document.getElementById('logPanel');
       const slotsEl = document.getElementById('slots');
@@ -485,19 +487,11 @@
         params.get('whep4') || '',
       ];
       const ORTM_CONFIG = {
-        x: 24,
-        y: 24,
-        cell: 12,
-        padding: 12,
-        gridSize: 32,
-        finderSize: 4,
-        timingIndex: 4,
+        ...DEFAULT_RASTER_PROFILE,
         scales: [1.0, 0.95, 1.05, 0.9, 1.1, 2.0, 1.9, 2.1],
         offsets: [0, -4, 4],
       };
-      const ORTM_PAYLOAD_BITS = 4 + 16 + 32 + 16;
-      const ORTM_SUPPORTED_VERSION = 0;
-      const ORTM_MAX_REASONABLE_LATENCY_MS = 5000;
+      const ORTM_READ_ROI = buildReadRoi(ORTM_CONFIG);
       const ORTM_DECODE_INTERVAL_MS = 200;
       const ORTM_DECODE_MODE = 'rvfc';
       const ORTM_STALL_CHART_INTERVAL_MS = 250;
@@ -561,300 +555,12 @@
         }).catch(() => {});
       }
 
-      function crc16CcittFalse(bytes) {
-        let crc = 0xffff;
-        for (const byte of bytes) {
-          crc ^= byte << 8;
-          for (let index = 0; index < 8; index += 1) {
-            if (crc & 0x8000) {
-              crc = ((crc << 1) ^ 0x1021) & 0xffff;
-            } else {
-              crc = (crc << 1) & 0xffff;
-            }
-          }
-        }
-        return crc;
-      }
-
-      function ortmInFinder(row, col) {
-        const { finderSize, gridSize } = ORTM_CONFIG;
-        return (
-          (row < finderSize && col < finderSize) ||
-          (row < finderSize && col >= gridSize - finderSize) ||
-          (row >= gridSize - finderSize && col < finderSize) ||
-          (row >= gridSize - finderSize && col >= gridSize - finderSize)
-        );
-      }
-
-      function ortmIsReservedCell(row, col) {
-        return ortmInFinder(row, col) || row === ORTM_CONFIG.timingIndex || col === ORTM_CONFIG.timingIndex;
-      }
-
-      function ortmExpectedFinderBit(localRow, localCol) {
-        return localRow === 0 || localRow === ORTM_CONFIG.finderSize - 1 || localCol === 0 || localCol === ORTM_CONFIG.finderSize - 1 ? 1 : 0;
-      }
-
-      function ortmBitsToNumber(bits, offset, width) {
-        let value = 0;
-        for (let index = 0; index < width; index += 1) {
-          value = (value << 1) | bits[offset + index];
-        }
-        return value >>> 0;
-      }
-
-      function ortmMedian(values) {
-        if (!values.length) return NaN;
-        const sorted = [...values].sort((left, right) => left - right);
-        const middle = Math.floor(sorted.length / 2);
-        return sorted.length % 2
-          ? sorted[middle]
-          : (sorted[middle - 1] + sorted[middle]) / 2;
-      }
-
-      function buildOrtmCandidates() {
-        const candidates = [];
-        for (const scale of ORTM_CONFIG.scales) {
-          for (const dx of ORTM_CONFIG.offsets) {
-            for (const dy of ORTM_CONFIG.offsets) {
-              const cell = ORTM_CONFIG.cell * scale;
-              const padding = ORTM_CONFIG.padding * scale;
-              const markerSize = ORTM_CONFIG.gridSize * cell;
-              candidates.push({
-                scale,
-                dx,
-                dy,
-                x: ORTM_CONFIG.x + dx,
-                y: ORTM_CONFIG.y + dy,
-                cell,
-                padding,
-                markerSize,
-                boxSize: markerSize + padding * 2,
-              });
-            }
-          }
-        }
-        return candidates;
-      }
-
-      const ORTM_CANDIDATES = buildOrtmCandidates();
-
-      function buildOrtmReadRoi() {
-        const minX = Math.floor(Math.min(...ORTM_CANDIDATES.map((candidate) => candidate.x)));
-        const minY = Math.floor(Math.min(...ORTM_CANDIDATES.map((candidate) => candidate.y)));
-        const maxX = Math.ceil(Math.max(...ORTM_CANDIDATES.map((candidate) => candidate.x + candidate.boxSize)));
-        const maxY = Math.ceil(Math.max(...ORTM_CANDIDATES.map((candidate) => candidate.y + candidate.boxSize)));
-        return {
-          x: Math.max(0, minX),
-          y: Math.max(0, minY),
-          width: Math.max(1, maxX - Math.max(0, minX)),
-          height: Math.max(1, maxY - Math.max(0, minY)),
-        };
-      }
-
-      const ORTM_READ_ROI = buildOrtmReadRoi();
-
-      function ortmSampleCellLuma(imageData, candidate, row, col, roiX = 0, roiY = 0) {
-        const positions = [0.2, 0.5, 0.8];
-        const originX = candidate.x + candidate.padding + col * candidate.cell;
-        const originY = candidate.y + candidate.padding + row * candidate.cell;
-        let total = 0;
-        let count = 0;
-        for (const px of positions) {
-          for (const py of positions) {
-            const x = Math.round(originX + candidate.cell * px) - roiX;
-            const y = Math.round(originY + candidate.cell * py) - roiY;
-            if (x < 0 || x >= imageData.width || y < 0 || y >= imageData.height) {
-              continue;
-            }
-            const offset = (y * imageData.width + x) * 4;
-            const r = imageData.data[offset];
-            const g = imageData.data[offset + 1];
-            const b = imageData.data[offset + 2];
-            total += 0.299 * r + 0.587 * g + 0.114 * b;
-            count += 1;
-          }
-        }
-        return count ? total / count : NaN;
-      }
-
       function decodeOrtmFromImageData(imageData, frameWidth, frameHeight, nowMs, roiX = 0, roiY = 0) {
-        let bestFailure = null;
-
-        for (const candidate of ORTM_CANDIDATES) {
-          if (
-            candidate.x < 0 ||
-            candidate.y < 0 ||
-            candidate.x + candidate.boxSize > frameWidth ||
-            candidate.y + candidate.boxSize > frameHeight
-          ) {
-            continue;
-          }
-
-          const lumaGrid = Array.from({ length: ORTM_CONFIG.gridSize }, () => new Array(ORTM_CONFIG.gridSize).fill(255));
-          let invalid = false;
-
-          for (let row = 0; row < ORTM_CONFIG.gridSize && !invalid; row += 1) {
-            for (let col = 0; col < ORTM_CONFIG.gridSize; col += 1) {
-              const luma = ortmSampleCellLuma(imageData, candidate, row, col, roiX, roiY);
-              if (!Number.isFinite(luma)) {
-                invalid = true;
-                break;
-              }
-              lumaGrid[row][col] = luma;
-            }
-          }
-
-          if (invalid) {
-            continue;
-          }
-
-          const finderBlackLumas = [];
-          const finderWhiteLumas = [];
-          for (let row = 0; row < ORTM_CONFIG.gridSize; row += 1) {
-            for (let col = 0; col < ORTM_CONFIG.gridSize; col += 1) {
-              if (!ortmInFinder(row, col)) continue;
-              const localRow = row < ORTM_CONFIG.finderSize ? row : row - (ORTM_CONFIG.gridSize - ORTM_CONFIG.finderSize);
-              const localCol = col < ORTM_CONFIG.finderSize ? col : col - (ORTM_CONFIG.gridSize - ORTM_CONFIG.finderSize);
-              const samples = ortmExpectedFinderBit(localRow, localCol) === 1
-                ? finderBlackLumas
-                : finderWhiteLumas;
-              samples.push(lumaGrid[row][col]);
-            }
-          }
-          const blackLevel = ortmMedian(finderBlackLumas);
-          const whiteLevel = ortmMedian(finderWhiteLumas);
-          const threshold = (blackLevel + whiteLevel) / 2;
-          const contrast = whiteLevel - blackLevel;
-          const bitGrid = lumaGrid.map((row) => row.map((luma) => (luma < threshold ? 1 : 0)));
-          let finderErrors = 0;
-          let timingErrors = 0;
-
-          for (let row = 0; row < ORTM_CONFIG.gridSize; row += 1) {
-            for (let col = 0; col < ORTM_CONFIG.gridSize; col += 1) {
-              if (ortmInFinder(row, col)) {
-                const localRow = row < ORTM_CONFIG.finderSize ? row : row - (ORTM_CONFIG.gridSize - ORTM_CONFIG.finderSize);
-                const localCol = col < ORTM_CONFIG.finderSize ? col : col - (ORTM_CONFIG.gridSize - ORTM_CONFIG.finderSize);
-                if (bitGrid[row][col] !== ortmExpectedFinderBit(localRow, localCol)) {
-                  finderErrors += 1;
-                }
-              } else if (row === ORTM_CONFIG.timingIndex) {
-                if (bitGrid[row][col] !== (col % 2)) {
-                  timingErrors += 1;
-                }
-              } else if (col === ORTM_CONFIG.timingIndex) {
-                if (bitGrid[row][col] !== (row % 2)) {
-                  timingErrors += 1;
-                }
-              }
-            }
-          }
-
-          const score = finderErrors * 4 + timingErrors * 2 - Math.max(contrast, 0) / 32;
-          const failureBase = {
-            ok: false,
-            score,
-            finder_errors: finderErrors,
-            timing_errors: timingErrors,
-            threshold,
-            contrast,
-            black_level: blackLevel,
-            white_level: whiteLevel,
-            candidate,
-          };
-
-          if (finderErrors > 8 || timingErrors > 10 || contrast < 32) {
-            const failure = {
-              ...failureBase,
-              reason: finderErrors > 8 || timingErrors > 10 ? 'structure-mismatch' : 'low-contrast',
-            };
-            if (!bestFailure || failure.score < bestFailure.score) {
-              bestFailure = failure;
-            }
-            continue;
-          }
-
-          const payloadBits = [];
-          for (let row = 0; row < ORTM_CONFIG.gridSize; row += 1) {
-            for (let col = 0; col < ORTM_CONFIG.gridSize; col += 1) {
-              if (ortmIsReservedCell(row, col)) continue;
-              payloadBits.push(bitGrid[row][col]);
-            }
-          }
-
-          if (payloadBits.length < ORTM_PAYLOAD_BITS) {
-            const failure = { ...failureBase, reason: 'payload-short' };
-            if (!bestFailure || failure.score < bestFailure.score) {
-              bestFailure = failure;
-            }
-            continue;
-          }
-
-          const version = ortmBitsToNumber(payloadBits, 0, 4);
-          const frameSeq = ortmBitsToNumber(payloadBits, 4, 16);
-          const timestampMs = ortmBitsToNumber(payloadBits, 20, 32);
-          const crc16 = ortmBitsToNumber(payloadBits, 52, 16);
-          const expectedCrc16 = crc16CcittFalse(new Uint8Array([
-            version & 0x0f,
-            (frameSeq >>> 8) & 0xff,
-            frameSeq & 0xff,
-            (timestampMs >>> 24) & 0xff,
-            (timestampMs >>> 16) & 0xff,
-            (timestampMs >>> 8) & 0xff,
-            timestampMs & 0xff,
-          ]));
-
-          if (version !== ORTM_SUPPORTED_VERSION) {
-            const failure = { ...failureBase, reason: 'unsupported-version' };
-            if (!bestFailure || failure.score < bestFailure.score) {
-              bestFailure = failure;
-            }
-            continue;
-          }
-
-          if (crc16 !== expectedCrc16) {
-            const failure = { ...failureBase, reason: 'crc-mismatch' };
-            if (!bestFailure || failure.score < bestFailure.score) {
-              bestFailure = failure;
-            }
-            continue;
-          }
-
-          const latencyMs = ((nowMs >>> 0) - timestampMs) >>> 0;
-          if (latencyMs < 0 || latencyMs >= ORTM_MAX_REASONABLE_LATENCY_MS) {
-            const failure = { ...failureBase, reason: 'latency-out-of-range' };
-            if (!bestFailure || failure.score < bestFailure.score) {
-              bestFailure = failure;
-            }
-            continue;
-          }
-
-          return {
-            ok: true,
-            version,
-            frame_seq: frameSeq,
-            timestamp_ms: timestampMs,
-            latency_ms: latencyMs,
-            finder_errors: finderErrors,
-            timing_errors: timingErrors,
-            threshold,
-            contrast,
-            black_level: blackLevel,
-            white_level: whiteLevel,
-            candidate,
-          };
-        }
-
-        return bestFailure || {
-          ok: false,
-          reason: 'no-candidate',
-          score: Infinity,
-          finder_errors: null,
-          timing_errors: null,
-          threshold: null,
-          contrast: null,
-          black_level: null,
-          white_level: null,
-        };
+        return decodeRgbaImage(imageData, frameWidth, frameHeight, nowMs, {
+          profile: ORTM_CONFIG,
+          roiX,
+          roiY,
+        });
       }
 
       function absoluteUrl(value) {

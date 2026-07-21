@@ -42,24 +42,15 @@ webrtcEncryption: false
 webrtcAllowOrigins: ["*"]
 webrtcLocalUDPAddress: :8189
 webrtcLocalTCPAddress: :8189
-webrtcIPsFromInterfaces: false
+webrtcIPsFromInterfaces: true
 webrtcIPsFromInterfacesList: []
 webrtcAdditionalHosts:
   - 127.0.0.1
   - 192.168.1.214
   - 100.85.53.87
 
-# MediaMTX also needs TURN on the server side; browser-only ICE config is not enough for WHEP.
-# These values should match the TURN service actually used by the demo web app.
-webrtcICEServers2:
-  - url: turn:47.102.106.162:3478?transport=udp
-    username: AUTH_SECRET
-    password: be331ba315bf4b5484fc92a9514be0d7fca40df62d8bb1295946c4a6682781c0
-    clientOnly: false
-  - url: turn:47.102.106.162:3478?transport=tcp
-    username: AUTH_SECRET
-    password: be331ba315bf4b5484fc92a9514be0d7fca40df62d8bb1295946c4a6682781c0
-    clientOnly: false
+# Direct mode intentionally has no server-side TURN dependency.
+webrtcICEServers2: []
 
 pathDefaults:
   source: publisher

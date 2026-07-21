@@ -3,3 +3,8 @@ npm-debug.log
 webrtc-direct-probe/node_modules
 .git
 .DS_Store
+.env
+.tmp
+logs
+**/__pycache__
+**/*.pyc

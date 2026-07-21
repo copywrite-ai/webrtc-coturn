@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import os
 import signal
-import struct
 import sys
 import time
 from collections import deque
@@ -17,12 +16,8 @@ gi.require_version("GLib", "2.0")
 import cairo
 from gi.repository import GLib, Gst  # noqa: E402
 
-
-GRID_SIZE = 32
-FINDER_SIZE = 4
-TIMING_INDEX = 4
-ORTM_VERSION = 0
-ORTM_PAYLOAD_BITS = 4 + 16 + 32 + 16
+from ortm.codec import ENCODED_CELLS as ORTM_ENCODED_CELLS
+from ortm.codec import GRID_SIZE, VERSION as ORTM_VERSION, encode_grid
 
 
 def env_required(name):
@@ -68,108 +63,6 @@ def wallclock_ms():
 
 def timestamp_text(timezone):
     return datetime.now(timezone).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-
-
-def crc16_ccitt_false(data):
-    crc = 0xFFFF
-    for byte in data:
-        crc ^= byte << 8
-        for _ in range(8):
-            if crc & 0x8000:
-                crc = ((crc << 1) ^ 0x1021) & 0xFFFF
-            else:
-                crc = (crc << 1) & 0xFFFF
-    return crc
-
-
-def bits_from_int(value, width):
-    return [(value >> shift) & 1 for shift in range(width - 1, -1, -1)]
-
-
-def in_finder(row, col):
-    return (
-        (row < FINDER_SIZE and col < FINDER_SIZE)
-        or (row < FINDER_SIZE and col >= GRID_SIZE - FINDER_SIZE)
-        or (row >= GRID_SIZE - FINDER_SIZE and col < FINDER_SIZE)
-        or (row >= GRID_SIZE - FINDER_SIZE and col >= GRID_SIZE - FINDER_SIZE)
-    )
-
-
-def is_reserved_cell(row, col):
-    return in_finder(row, col) or row == TIMING_INDEX or col == TIMING_INDEX
-
-
-def build_encoded_cells():
-    cells = {
-        (row, col)
-        for row in range(GRID_SIZE)
-        for col in range(GRID_SIZE)
-        if is_reserved_cell(row, col)
-    }
-    payload_cells = 0
-    for row in range(GRID_SIZE):
-        for col in range(GRID_SIZE):
-            if is_reserved_cell(row, col):
-                continue
-            if payload_cells >= ORTM_PAYLOAD_BITS:
-                return cells
-            cells.add((row, col))
-            payload_cells += 1
-    return cells
-
-
-ORTM_ENCODED_CELLS = build_encoded_cells()
-
-
-def draw_finder(bits, top, left):
-    for row in range(FINDER_SIZE):
-        for col in range(FINDER_SIZE):
-            bits[top + row][left + col] = (
-                1
-                if row in (0, FINDER_SIZE - 1) or col in (0, FINDER_SIZE - 1)
-                else 0
-            )
-
-
-def build_ortm_bits(version, frame_seq, timestamp_ms_low32):
-    crc_input = struct.pack(">BHI", version & 0x0F, frame_seq & 0xFFFF, timestamp_ms_low32)
-    crc16 = crc16_ccitt_false(crc_input)
-
-    payload_bits = []
-    payload_bits.extend(bits_from_int(version & 0x0F, 4))
-    payload_bits.extend(bits_from_int(frame_seq & 0xFFFF, 16))
-    payload_bits.extend(bits_from_int(timestamp_ms_low32, 32))
-    payload_bits.extend(bits_from_int(crc16, 16))
-
-    bits = [[0 for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
-
-    draw_finder(bits, 0, 0)
-    draw_finder(bits, 0, GRID_SIZE - FINDER_SIZE)
-    draw_finder(bits, GRID_SIZE - FINDER_SIZE, 0)
-    draw_finder(bits, GRID_SIZE - FINDER_SIZE, GRID_SIZE - FINDER_SIZE)
-
-    for col in range(GRID_SIZE):
-        if not in_finder(TIMING_INDEX, col):
-            bits[TIMING_INDEX][col] = col % 2
-    for row in range(GRID_SIZE):
-        if not in_finder(row, TIMING_INDEX):
-            bits[row][TIMING_INDEX] = row % 2
-
-    payload_index = 0
-    for row in range(GRID_SIZE):
-        for col in range(GRID_SIZE):
-            if is_reserved_cell(row, col):
-                continue
-            if payload_index < len(payload_bits):
-                bits[row][col] = payload_bits[payload_index]
-                payload_index += 1
-            else:
-                bits[row][col] = 0
-
-    if payload_index != len(payload_bits):
-        raise RuntimeError("ORTM payload does not fit into the 32x32 grid")
-
-    return bits
 
 
 class StatsWindow:
@@ -326,7 +219,7 @@ class ORTMOverlayRenderer:
         self.frame_seq = (self.frame_seq + 1) & 0xFFFF
         timestamp_ms_full = wallclock_ms()
         timestamp_ms_low32 = timestamp_ms_full & 0xFFFFFFFF
-        ortm_bits = build_ortm_bits(ORTM_VERSION, current_frame_seq, timestamp_ms_low32)
+        ortm_bits = encode_grid(current_frame_seq, timestamp_ms_low32, ORTM_VERSION)
 
         context.save()
         try:

@@ -12,11 +12,14 @@ RUN set -eux; \
   && apt-get install -y --no-install-recommends iproute2 python3-cairo python3-gi-cairo \
   && rm -rf /var/lib/apt/lists/*
 
-COPY publish-whip.sh /usr/local/bin/publish-whip.sh
-COPY publish-whip.py /usr/local/bin/publish-whip.py
+COPY docker/whip-publisher/publish-whip.sh /usr/local/bin/publish-whip.sh
+COPY docker/whip-publisher/publish-whip.py /usr/local/bin/publish-whip.py
+COPY vendor/open-raster-timing-marker/src/python/ortm /opt/ortm/ortm
+
+ENV PYTHONPATH=/opt/ortm
 
 RUN chmod +x /usr/local/bin/publish-whip.sh /usr/local/bin/publish-whip.py \
-  && python3 -c 'import cairo; import gi' \
+  && python3 -c 'import cairo; import gi; import ortm; assert ortm.__version__ == "0.1.0"' \
   && gst-inspect-1.0 whipclientsink >/dev/null \
   && gst-inspect-1.0 cairooverlay >/dev/null \
   && gst-inspect-1.0 v4l2src >/dev/null

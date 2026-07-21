@@ -13,8 +13,8 @@ services:
 
   fish_front_whip:
     build:
-      context: ./docker/whip-publisher
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: docker/whip-publisher/Dockerfile
       args:
         UBUNTU_VERSION: "${WHIP_UBUNTU_VERSION:-24.04}"
         GST_PLUGINS_RS_REF: "${WHIP_GST_PLUGINS_RS_REF:-0.14.1}"
@@ -54,8 +54,8 @@ services:
       ORTM_Y: "${ORTM_Y:-24}"
       ORTM_CELL: "${ORTM_CELL:-12}"
       ORTM_PADDING: "${ORTM_PADDING:-12}"
-      ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-1.0}"
-      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-1.0}"
+      ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-0.15}"
+      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-0.65}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
       X264_THREADS: "${X264_THREADS:-}"
       X264_SLICED_THREADS: "${X264_SLICED_THREADS:-}"
@@ -102,8 +102,8 @@ services:
       ORTM_Y: "${ORTM_Y:-24}"
       ORTM_CELL: "${ORTM_CELL:-12}"
       ORTM_PADDING: "${ORTM_PADDING:-12}"
-      ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-1.0}"
-      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-1.0}"
+      ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-0.15}"
+      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-0.65}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped
 
@@ -143,8 +143,8 @@ services:
       ORTM_Y: "${ORTM_Y:-24}"
       ORTM_CELL: "${ORTM_CELL:-12}"
       ORTM_PADDING: "${ORTM_PADDING:-12}"
-      ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-1.0}"
-      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-1.0}"
+      ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-0.15}"
+      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-0.65}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped
 
@@ -184,8 +184,8 @@ services:
       ORTM_Y: "${ORTM_Y:-24}"
       ORTM_CELL: "${ORTM_CELL:-12}"
       ORTM_PADDING: "${ORTM_PADDING:-12}"
-      ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-1.0}"
-      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-1.0}"
+      ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-0.15}"
+      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-0.65}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped
 
@@ -225,7 +225,7 @@ services:
       ORTM_Y: "${ORTM_Y:-24}"
       ORTM_CELL: "${ORTM_CELL:-12}"
       ORTM_PADDING: "${ORTM_PADDING:-12}"
-      ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-1.0}"
-      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-1.0}"
+      ORTM_BACKGROUND_ALPHA: "${ORTM_BACKGROUND_ALPHA:-0.15}"
+      ORTM_CELL_ALPHA: "${ORTM_CELL_ALPHA:-0.65}"
       X264_OPTION_STRING: "${X264_OPTION_STRING:-nal-hrd=cbr:force-cfr=1:filler=1}"
     restart: unless-stopped
