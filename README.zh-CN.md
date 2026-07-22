@@ -155,6 +155,31 @@ http://localhost:9001/?v=4
 
 如果用 Docker Compose，项目根目录下存在 `.env` 时会自动读取。
 
+## 前后端接入指南
+
+当前正式接入链路为：
+
+```text
+GStreamer Publisher
+→ WHIP
+→ MediaMTX
+→ WHEP
+→ Web 播放器
+→ ORTM / WebRTC 指标
+→ Prometheus / Grafana
+```
+
+前端通过同源且末尾不带 `/` 的 WHEP 地址播放：
+
+```text
+https://video.example.com/fish_front/whep
+```
+
+后端负责鉴权、WHEP 反向代理、`Location` 重写和 `/client-log` 指标接收；Web 前端只拉取发送端视频，不访问观看端摄像头。完整的接口约定、代码示例、ORTM 解码方式、生产拓扑和验收清单见：
+
+- [ORTM 视频链路前后端接入指南](./FRONTEND_BACKEND_ORTM_INTEGRATION.zh-CN.md)
+- [Prometheus/Grafana 监控部署指南](./monitoring/README.md)
+
 ## 典型验证流程
 
 ### 1. 强制 TURN relay 验证
