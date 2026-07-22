@@ -258,6 +258,10 @@ Before publishing, verify that:
 
 This repository is intended as a minimal validation lab, not a production signaling service.
 
+The repository also includes a standalone Prometheus and Grafana monitoring stack. See
+[monitoring/README.md](./monitoring/README.md) for clean deployment, smoke testing, and
+integration with an existing monitoring platform.
+
 If you publish it, consider adding:
 
 - screenshots or a short demo GIF

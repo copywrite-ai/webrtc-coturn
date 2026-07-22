@@ -261,6 +261,9 @@ https://your-device.your-tailnet.ts.net
 
 这个仓库的定位是“最小验证实验室”，不是生产级信令服务。
 
+仓库同时提供独立的 Prometheus 与 Grafana 监控栈。新环境部署、自动验证以及接入已有监控平台的方式，见
+[监控部署文档](./monitoring/README.md)。
+
 如果你要公开发布，建议再补充：
 
 - 一两张页面截图或短 GIF
