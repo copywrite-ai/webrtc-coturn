@@ -468,7 +468,7 @@
     <script type="module">
       import { DEFAULT_RASTER_PROFILE, buildReadRoi, decodeRgbaImage } from './vendor/ortm/raster.js';
 
-      const BUILD_VERSION = '2026-07-21-ortm-v0.1.0';
+      const BUILD_VERSION = '2026-07-22-rate-watchdog';
       const logEl = document.getElementById('log');
       const logPanelEl = document.getElementById('logPanel');
       const slotsEl = document.getElementById('slots');
@@ -635,6 +635,8 @@
             crcFailures: 0,
             structureFailures: 0,
             lowContrastFailures: 0,
+            latencyRangeFailures: 0,
+            rawAgeMs: null,
             lastResult: null,
           },
           lastMetricLogLine: null,
@@ -825,6 +827,8 @@
             `ortmCrcFailures=${ortmDecode.crcFailures}`,
             `ortmStructureFailures=${ortmDecode.structureFailures}`,
             `ortmLowContrastFailures=${ortmDecode.lowContrastFailures}`,
+            `ortmLatencyRangeFailures=${ortmDecode.latencyRangeFailures}`,
+            `ortmRawAge=${Number.isFinite(ortmDecode.rawAgeMs) ? Math.round(ortmDecode.rawAgeMs) : '--'}ms`,
             `ortmFinderErrors=${ortmQuality.finder_errors ?? '--'}`,
             `ortmTimingErrors=${ortmQuality.timing_errors ?? '--'}`,
             `ortmBlack=${Number.isFinite(ortmQuality.black_level) ? ortmQuality.black_level.toFixed(1) : '--'}`,
@@ -889,6 +893,8 @@
             crcFailures: 0,
             structureFailures: 0,
             lowContrastFailures: 0,
+            latencyRangeFailures: 0,
+            rawAgeMs: null,
             lastResult: null,
           };
           state.lastMetricLogLine = null;
@@ -974,6 +980,9 @@
           const ortmDecode = state.ortmDecodeStats;
           ortmDecode.attempts += 1;
           ortmDecode.lastResult = result;
+          if (Number.isFinite(result.raw_age_ms)) {
+            ortmDecode.rawAgeMs = result.raw_age_ms;
+          }
           if (result.ok) {
             ortmDecode.successes += 1;
           } else {
@@ -981,6 +990,7 @@
             if (result.reason === 'crc-mismatch') ortmDecode.crcFailures += 1;
             if (result.reason === 'structure-mismatch') ortmDecode.structureFailures += 1;
             if (result.reason === 'low-contrast') ortmDecode.lowContrastFailures += 1;
+            if (result.reason === 'latency-out-of-range') ortmDecode.latencyRangeFailures += 1;
           }
 
           if (result.ok) {
@@ -1014,7 +1024,7 @@
           } else if (state.ortmLastFailureReason !== result.reason && performance.now() - state.ortmLastSuccessAt > 1500) {
             updateOrtmActivityMetrics();
             log(
-              `${name} ORTM fail reason=${result.reason} score=${Number.isFinite(result.score) ? result.score.toFixed(1) : 'inf'} finder=${result.finder_errors ?? '--'} timing=${result.timing_errors ?? '--'} black=${result.black_level == null ? '--' : result.black_level.toFixed(1)} white=${result.white_level == null ? '--' : result.white_level.toFixed(1)} threshold=${result.threshold == null ? '--' : result.threshold.toFixed(1)} contrast=${result.contrast == null ? '--' : result.contrast.toFixed(1)} scale=${result.candidate?.scale ?? '--'} dx=${result.candidate?.dx ?? '--'} dy=${result.candidate?.dy ?? '--'}`
+              `${name} ORTM fail reason=${result.reason} seq=${result.frame_seq ?? '--'} timestamp=${result.timestamp_ms ?? '--'} rawAge=${Number.isFinite(result.raw_age_ms) ? `${Math.round(result.raw_age_ms)}ms` : '--'} score=${Number.isFinite(result.score) ? result.score.toFixed(1) : 'inf'} finder=${result.finder_errors ?? '--'} timing=${result.timing_errors ?? '--'} black=${result.black_level == null ? '--' : result.black_level.toFixed(1)} white=${result.white_level == null ? '--' : result.white_level.toFixed(1)} threshold=${result.threshold == null ? '--' : result.threshold.toFixed(1)} contrast=${result.contrast == null ? '--' : result.contrast.toFixed(1)} scale=${result.candidate?.scale ?? '--'} dx=${result.candidate?.dx ?? '--'} dy=${result.candidate?.dy ?? '--'}`
             );
             state.ortmLastFailureReason = result.reason;
           } else {

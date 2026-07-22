@@ -146,12 +146,15 @@ export function decodeRgbaImage(
     ) reason = 'structure-mismatch';
     else if (contrast < (profile.minContrast ?? DEFAULT_RASTER_PROFILE.minContrast)) reason = 'low-contrast';
 
+    let marker = null;
+    let rawAgeMs = null;
     try {
       if (reason) throw new OrtmDecodeError(reason);
-      const marker = decodeGrid(grid, {
+      marker = decodeGrid(grid, {
         maxFinderErrors: profile.maxFinderErrors ?? DEFAULT_RASTER_PROFILE.maxFinderErrors,
         maxTimingErrors: profile.maxTimingErrors ?? DEFAULT_RASTER_PROFILE.maxTimingErrors,
       });
+      rawAgeMs = (((Number(nowMs) >>> 0) - marker.timestampMs) | 0);
       const latencyMs = frameAgeMs(nowMs, marker.timestampMs, {
         maxAgeMs: profile.maxAgeMs ?? DEFAULT_RASTER_PROFILE.maxAgeMs,
       });
@@ -160,11 +163,21 @@ export function decodeRgbaImage(
         frame_seq: marker.frameSeq,
         timestamp_ms: marker.timestampMs,
         latency_ms: latencyMs,
+        raw_age_ms: rawAgeMs,
         ...details,
         ok: true,
       };
     } catch (error) {
-      const failure = { ...details, reason: reason ?? error.reason ?? 'decode-error' };
+      const failure = {
+        ...details,
+        reason: reason ?? error.reason ?? 'decode-error',
+        ...(marker ? {
+          version: marker.version,
+          frame_seq: marker.frameSeq,
+          timestamp_ms: marker.timestampMs,
+          raw_age_ms: rawAgeMs,
+        } : {}),
+      };
       if (!bestFailure || failure.score < bestFailure.score) bestFailure = failure;
     }
   }

@@ -334,6 +334,7 @@ function parsePublisherMetricLine(line, fallbackStream) {
       deltaFrameAvgBytes: frame.delta_avg,
       deltaFrameMaxBytes: frame.delta_max,
       encodedBitrateKbps: frame.bitrate_kbps,
+      actualFps: frame.actual_fps,
       width: frame.width,
       height: frame.height,
       fps: frame.fps,
@@ -530,6 +531,12 @@ function prometheusSnapshot() {
     if (isMetricNumber(viewer.ortmLowContrastFailures)) {
       lines.push(`tunnel_viewer_slot_ortm_low_contrast_failures{${label}} ${Number(viewer.ortmLowContrastFailures)}`);
     }
+    if (isMetricNumber(viewer.ortmLatencyRangeFailures)) {
+      lines.push(`tunnel_viewer_slot_ortm_latency_range_failures{${label}} ${Number(viewer.ortmLatencyRangeFailures)}`);
+    }
+    if (isMetricNumber(viewer.ortmRawAge)) {
+      lines.push(`tunnel_viewer_slot_ortm_raw_age_ms{${label}} ${Number(viewer.ortmRawAge)}`);
+    }
     if (isMetricNumber(viewer.ortmFinderErrors)) {
       lines.push(`tunnel_viewer_slot_ortm_finder_errors{${label}} ${Number(viewer.ortmFinderErrors)}`);
     }
@@ -705,6 +712,9 @@ function prometheusSnapshot() {
     }
     if (isMetricNumber(item.publisher.encodedBitrateKbps)) {
       lines.push(`tunnel_publisher_encoded_bitrate_kbps{${label}} ${Number(item.publisher.encodedBitrateKbps)}`);
+    }
+    if (isMetricNumber(item.publisher.actualFps)) {
+      lines.push(`tunnel_publisher_actual_fps{${label}} ${Number(item.publisher.actualFps)}`);
     }
     if (isMetricNumber(item.publisher.width)) {
       lines.push(`tunnel_publisher_resolution_width{${label}} ${Number(item.publisher.width)}`);

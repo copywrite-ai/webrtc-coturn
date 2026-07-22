@@ -130,6 +130,17 @@
           "legendFormat": "{{stream}} upstream",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "editorMode": "code",
+          "expr": "tunnel_viewer_slot_ortm_raw_age_ms",
+          "legendFormat": "{{slot}} raw age",
+          "range": true,
+          "refId": "C"
         }
       ],
       "title": "G2G latency and upstream estimate",
@@ -1242,6 +1253,17 @@
           "legendFormat": "{{slot}} contrast failures",
           "range": true,
           "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "editorMode": "code",
+          "expr": "tunnel_viewer_slot_ortm_latency_range_failures",
+          "legendFormat": "{{slot}} clock/range failures",
+          "range": true,
+          "refId": "E"
         }
       ],
       "title": "ORTM decode quality",
@@ -1285,7 +1307,7 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 24,
+        "w": 12,
         "x": 0,
         "y": 31
       },
@@ -1353,6 +1375,77 @@
       ],
       "title": "ORTM finder reference luma",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "fps",
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "fps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 31
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "editorMode": "code",
+          "expr": "tunnel_publisher_actual_fps",
+          "legendFormat": "{{stream}} actual",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "editorMode": "code",
+          "expr": "tunnel_publisher_target_fps",
+          "legendFormat": "{{stream}} target",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Publisher actual FPS",
+      "type": "timeseries"
     }
   ],
   "refresh": "2s",
@@ -1373,6 +1466,6 @@
   "timezone": "browser",
   "title": "Tunnel WebRTC Latency",
   "uid": "tunnel-webrtc-latency",
-  "version": 4,
+  "version": 5,
   "weekStart": ""
 }

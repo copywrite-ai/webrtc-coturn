@@ -146,6 +146,12 @@ class EncodedFrameStats:
         elapsed_ns = max(now_ns - self.byte_window[0][0], 1)
         return (self.byte_window_total * 8.0) / (elapsed_ns / 1_000_000_000.0) / 1000.0
 
+    def window_fps(self, now_ns):
+        if len(self.byte_window) < 2:
+            return 0.0
+        elapsed_ns = max(now_ns - self.byte_window[0][0], 1)
+        return ((len(self.byte_window) - 1) * 1_000_000_000.0) / elapsed_ns
+
 
 class ORTMOverlayRenderer:
     def __init__(
@@ -458,6 +464,27 @@ def main():
     metrics_interval_frames = env_int("PIPELINE_METRICS_INTERVAL_FRAMES", 30)
     frame_metrics_window_seconds = env_float("FRAME_METRICS_WINDOW_SECONDS", 2.0)
     sender_frame_log_interval = env_int("SENDER_FRAME_LOG_INTERVAL", 30)
+    rate_watchdog_enabled = env_value("PIPELINE_RATE_WATCHDOG", "1") == "1"
+    rate_watchdog_warmup_seconds = env_float(
+        "PIPELINE_RATE_WATCHDOG_WARMUP_SECONDS", 5.0
+    )
+    rate_watchdog_max_fps_ratio = env_float(
+        "PIPELINE_RATE_WATCHDOG_MAX_FPS_RATIO", 1.5
+    )
+    rate_watchdog_max_bitrate_ratio = env_float(
+        "PIPELINE_RATE_WATCHDOG_MAX_BITRATE_RATIO", 2.0
+    )
+    rate_watchdog_consecutive_limit = env_int(
+        "PIPELINE_RATE_WATCHDOG_CONSECUTIVE", 3
+    )
+    if rate_watchdog_warmup_seconds < 0:
+        raise ValueError("PIPELINE_RATE_WATCHDOG_WARMUP_SECONDS must be >= 0")
+    if rate_watchdog_max_fps_ratio <= 1:
+        raise ValueError("PIPELINE_RATE_WATCHDOG_MAX_FPS_RATIO must be > 1")
+    if rate_watchdog_max_bitrate_ratio <= 1:
+        raise ValueError("PIPELINE_RATE_WATCHDOG_MAX_BITRATE_RATIO must be > 1")
+    if rate_watchdog_consecutive_limit < 1:
+        raise ValueError("PIPELINE_RATE_WATCHDOG_CONSECUTIVE must be >= 1")
     ortm_x = env_int("ORTM_X", 24)
     ortm_y = env_int("ORTM_Y", 24)
     ortm_cell = env_int("ORTM_CELL", 12)
@@ -557,6 +584,18 @@ def main():
         f"  pipe metrics : {'ortm-render + overlay->send' if metrics_enabled == '1' else '<off>'}",
         flush=True,
     )
+    print(
+        "  rate watchdog: "
+        + (
+            f"on warmup={rate_watchdog_warmup_seconds:.1f}s "
+            f"fps_ratio={rate_watchdog_max_fps_ratio:.2f} "
+            f"bitrate_ratio={rate_watchdog_max_bitrate_ratio:.2f} "
+            f"consecutive={rate_watchdog_consecutive_limit}"
+            if rate_watchdog_enabled
+            else "off"
+        ),
+        flush=True,
+    )
     print(f"  stun server  : {whip_stun_server or '<none>'}", flush=True)
     print(f"  turn server  : {'<configured>' if whip_turn_server else '<none>'}", flush=True)
     print(f"  turn server 2: {'<configured>' if whip_turn_server_2 else '<none>'}", flush=True)
@@ -600,6 +639,8 @@ def main():
 
     pipeline = Gst.parse_launch(pipeline_description)
     loop = GLib.MainLoop()
+    watchdog_triggered = False
+    pipeline_error = None
 
     overlay = pipeline.get_by_name("ortm_overlay")
     if overlay is None:
@@ -618,8 +659,10 @@ def main():
     )
     overlay.connect("draw", renderer.draw)
 
-    if metrics_enabled == "1":
+    if metrics_enabled == "1" or rate_watchdog_enabled:
         encoded_frame_stats = EncodedFrameStats(frame_metrics_window_seconds)
+        watchdog_started_ns = monotonic_ns()
+        watchdog_consecutive_breaches = 0
         frame_records_by_pts = {}
         frame_record_order = deque()
         frame_record_limit = 600
@@ -863,6 +906,7 @@ def main():
             )
 
         def print_frame_metrics(now_ns):
+            actual_fps = encoded_frame_stats.window_fps(now_ns)
             print(
                 "FRAME encoded_size_bytes "
                 f"stream={stream_name} "
@@ -879,6 +923,7 @@ def main():
                 f"delta_avg={encoded_frame_stats.delta_avg_bytes():.1f} "
                 f"delta_max={encoded_frame_stats.delta_max_bytes} "
                 f"bitrate_kbps={encoded_frame_stats.window_bitrate_kbps(now_ns):.1f} "
+                f"actual_fps={actual_fps:.1f} "
                 f"width={width} "
                 f"height={height} "
                 f"fps={fps} "
@@ -886,6 +931,46 @@ def main():
                 f"key_int={key_int_max}",
                 flush=True,
             )
+
+        def check_rate_watchdog(now_ns):
+            nonlocal watchdog_consecutive_breaches, watchdog_triggered
+            if not rate_watchdog_enabled or watchdog_triggered:
+                return
+            uptime_seconds = (now_ns - watchdog_started_ns) / 1_000_000_000.0
+            if uptime_seconds < rate_watchdog_warmup_seconds:
+                return
+
+            actual_fps = encoded_frame_stats.window_fps(now_ns)
+            actual_bitrate_kbps = encoded_frame_stats.window_bitrate_kbps(now_ns)
+            fps_ratio = actual_fps / max(fps, 1)
+            bitrate_ratio = actual_bitrate_kbps / max(bitrate_kbps, 1)
+            breached = (
+                fps_ratio > rate_watchdog_max_fps_ratio
+                or bitrate_ratio > rate_watchdog_max_bitrate_ratio
+            )
+            watchdog_consecutive_breaches = (
+                watchdog_consecutive_breaches + 1 if breached else 0
+            )
+            if watchdog_consecutive_breaches < max(
+                rate_watchdog_consecutive_limit, 1
+            ):
+                return
+
+            watchdog_triggered = True
+            print(
+                "WATCHDOG rate_exceeded "
+                f"stream={stream_name} "
+                f"actual_fps={actual_fps:.1f} "
+                f"target_fps={fps} "
+                f"fps_ratio={fps_ratio:.2f} "
+                f"actual_bitrate_kbps={actual_bitrate_kbps:.1f} "
+                f"target_bitrate_kbps={bitrate_kbps} "
+                f"bitrate_ratio={bitrate_ratio:.2f} "
+                f"consecutive={watchdog_consecutive_breaches}",
+                file=sys.stderr,
+                flush=True,
+            )
+            GLib.idle_add(loop.quit)
 
         def print_pts_mapping():
             print(
@@ -1055,10 +1140,12 @@ def main():
                 and encoded_frame_stats.count % metrics_interval_frames == 0
             ):
                 last_metric_print_count = encoded_frame_stats.count
-                for metric_name, stats in metric_stats.items():
-                    print_metric(metric_name, stats)
-                print_frame_metrics(now)
-                print_pts_mapping()
+                if metrics_enabled == "1":
+                    for metric_name, stats in metric_stats.items():
+                        print_metric(metric_name, stats)
+                    print_frame_metrics(now)
+                    print_pts_mapping()
+                check_rate_watchdog(now)
             if record is not None:
                 frame_records_by_pts.pop(source_pts_ns, None)
             return Gst.PadProbeReturn.OK
@@ -1108,8 +1195,10 @@ def main():
     bus.add_signal_watch()
 
     def on_message(_bus, message):
+        nonlocal pipeline_error
         if message.type == Gst.MessageType.ERROR:
             err, debug = message.parse_error()
+            pipeline_error = err.message
             print(f"ERROR: {err.message}", file=sys.stderr, flush=True)
             if debug:
                 print(f"DEBUG: {debug}", file=sys.stderr, flush=True)
@@ -1130,6 +1219,10 @@ def main():
         loop.run()
     finally:
         pipeline.set_state(Gst.State.NULL)
+    if watchdog_triggered:
+        raise SystemExit(70)
+    if pipeline_error is not None:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
