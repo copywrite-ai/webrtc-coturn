@@ -8,7 +8,12 @@ const COMMAND_TYPES = new Set([
   'stop',
 ]);
 
-const ORTM_PROFILES = new Set(['default', '720p-minimal', '720p-three-finder']);
+const ORTM_PROFILES = new Set([
+  'default',
+  '720p-minimal',
+  '720p-three-finder',
+  '720p-two-top',
+]);
 
 function asTrimmedString(value, maxLength = 2048) {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';

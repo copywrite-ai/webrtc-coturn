@@ -5,6 +5,7 @@ export const VERSION = 0;
 export const PAYLOAD_BITS = 68;
 export const FINDER_LAYOUT_FOUR = 'four';
 export const FINDER_LAYOUT_THREE = 'three';
+export const FINDER_LAYOUT_TWO_TOP = 'two-top';
 
 export class OrtmDecodeError extends Error {
   constructor(reason, details = {}) {
@@ -50,17 +51,28 @@ export function inBottomRightFinder(row, col) {
   return row >= GRID_SIZE - FINDER_SIZE && col >= GRID_SIZE - FINDER_SIZE;
 }
 
+export function inBottomFinder(row, col) {
+  return row >= GRID_SIZE - FINDER_SIZE && (
+    col < FINDER_SIZE || col >= GRID_SIZE - FINDER_SIZE
+  );
+}
+
 export function validateFinderLayout(finderLayout) {
-  if (finderLayout !== FINDER_LAYOUT_FOUR && finderLayout !== FINDER_LAYOUT_THREE) {
+  if (
+    finderLayout !== FINDER_LAYOUT_FOUR &&
+    finderLayout !== FINDER_LAYOUT_THREE &&
+    finderLayout !== FINDER_LAYOUT_TWO_TOP
+  ) {
     throw new RangeError(`unsupported finder layout ${JSON.stringify(finderLayout)}`);
   }
 }
 
 export function inActiveFinder(row, col, finderLayout = FINDER_LAYOUT_FOUR) {
   validateFinderLayout(finderLayout);
-  return inFinder(row, col) && !(
-    finderLayout === FINDER_LAYOUT_THREE && inBottomRightFinder(row, col)
-  );
+  if (!inFinder(row, col)) return false;
+  if (finderLayout === FINDER_LAYOUT_THREE) return !inBottomRightFinder(row, col);
+  if (finderLayout === FINDER_LAYOUT_TWO_TOP) return !inBottomFinder(row, col);
+  return true;
 }
 
 export function isReserved(row, col) {
@@ -94,9 +106,11 @@ export const ENCODED_CELLS = Object.freeze(
 
 export function encodedCells(finderLayout = FINDER_LAYOUT_FOUR) {
   validateFinderLayout(finderLayout);
-  return finderLayout === FINDER_LAYOUT_FOUR
-    ? ENCODED_CELLS
-    : ENCODED_CELLS.filter(([row, col]) => !inBottomRightFinder(row, col));
+  if (finderLayout === FINDER_LAYOUT_FOUR) return ENCODED_CELLS;
+  const omitted = finderLayout === FINDER_LAYOUT_TWO_TOP
+    ? inBottomFinder
+    : inBottomRightFinder;
+  return ENCODED_CELLS.filter(([row, col]) => !omitted(row, col));
 }
 
 export function crcInput(version, frameSeq, timestampMs) {

@@ -13,7 +13,10 @@ PAYLOAD_BITS = 4 + 16 + 32 + 16
 UINT32_MASK = 0xFFFFFFFF
 FINDER_LAYOUT_FOUR = "four"
 FINDER_LAYOUT_THREE = "three"
-FINDER_LAYOUTS = frozenset((FINDER_LAYOUT_FOUR, FINDER_LAYOUT_THREE))
+FINDER_LAYOUT_TWO_TOP = "two-top"
+FINDER_LAYOUTS = frozenset(
+    (FINDER_LAYOUT_FOUR, FINDER_LAYOUT_THREE, FINDER_LAYOUT_TWO_TOP)
+)
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,12 @@ def in_bottom_right_finder(row: int, col: int) -> bool:
     return row >= GRID_SIZE - FINDER_SIZE and col >= GRID_SIZE - FINDER_SIZE
 
 
+def in_bottom_finder(row: int, col: int) -> bool:
+    return row >= GRID_SIZE - FINDER_SIZE and (
+        col < FINDER_SIZE or col >= GRID_SIZE - FINDER_SIZE
+    )
+
+
 def validate_finder_layout(finder_layout: str) -> None:
     if finder_layout not in FINDER_LAYOUTS:
         raise ValueError(f"unsupported finder layout {finder_layout!r}")
@@ -79,10 +88,13 @@ def in_active_finder(
     finder_layout: str = FINDER_LAYOUT_FOUR,
 ) -> bool:
     validate_finder_layout(finder_layout)
-    return in_finder(row, col) and not (
-        finder_layout == FINDER_LAYOUT_THREE
-        and in_bottom_right_finder(row, col)
-    )
+    if not in_finder(row, col):
+        return False
+    if finder_layout == FINDER_LAYOUT_THREE:
+        return not in_bottom_right_finder(row, col)
+    if finder_layout == FINDER_LAYOUT_TWO_TOP:
+        return not in_bottom_finder(row, col)
+    return True
 
 
 def is_reserved(row: int, col: int) -> bool:
@@ -121,10 +133,15 @@ def encoded_cells(
     validate_finder_layout(finder_layout)
     if finder_layout == FINDER_LAYOUT_FOUR:
         return ENCODED_CELLS
+    omitted = (
+        in_bottom_finder
+        if finder_layout == FINDER_LAYOUT_TWO_TOP
+        else in_bottom_right_finder
+    )
     return frozenset(
         (row, col)
         for row, col in ENCODED_CELLS
-        if not in_bottom_right_finder(row, col)
+        if not omitted(row, col)
     )
 
 

@@ -28,6 +28,15 @@ test('accepts the experimental three-finder profile', () => {
   assert.equal(command.ortmProfile, '720p-three-finder');
 });
 
+test('accepts the experimental two-top profile', () => {
+  const command = validateViewerCommand({
+    type: 'configure-and-play',
+    whepUrl: 'https://example.test/fish_front/whep',
+    ortmProfile: '720p-two-top',
+  });
+  assert.equal(command.ortmProfile, '720p-two-top');
+});
+
 test('rejects arbitrary commands and non-http WHEP URLs', () => {
   assert.throws(() => validateViewerCommand({ type: 'eval', code: 'alert(1)' }), /unsupported command/);
   assert.throws(

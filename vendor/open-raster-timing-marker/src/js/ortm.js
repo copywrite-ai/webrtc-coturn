@@ -3,6 +3,9 @@ export const FINDER_SIZE = 4;
 export const TIMING_INDEX = 4;
 export const VERSION = 0;
 export const PAYLOAD_BITS = 68;
+export const FINDER_LAYOUT_FOUR = 'four';
+export const FINDER_LAYOUT_THREE = 'three';
+export const FINDER_LAYOUT_TWO_TOP = 'two-top';
 
 export class OrtmDecodeError extends Error {
   constructor(reason, details = {}) {
@@ -44,6 +47,34 @@ export function inFinder(row, col) {
   );
 }
 
+export function inBottomRightFinder(row, col) {
+  return row >= GRID_SIZE - FINDER_SIZE && col >= GRID_SIZE - FINDER_SIZE;
+}
+
+export function inBottomFinder(row, col) {
+  return row >= GRID_SIZE - FINDER_SIZE && (
+    col < FINDER_SIZE || col >= GRID_SIZE - FINDER_SIZE
+  );
+}
+
+export function validateFinderLayout(finderLayout) {
+  if (
+    finderLayout !== FINDER_LAYOUT_FOUR &&
+    finderLayout !== FINDER_LAYOUT_THREE &&
+    finderLayout !== FINDER_LAYOUT_TWO_TOP
+  ) {
+    throw new RangeError(`unsupported finder layout ${JSON.stringify(finderLayout)}`);
+  }
+}
+
+export function inActiveFinder(row, col, finderLayout = FINDER_LAYOUT_FOUR) {
+  validateFinderLayout(finderLayout);
+  if (!inFinder(row, col)) return false;
+  if (finderLayout === FINDER_LAYOUT_THREE) return !inBottomRightFinder(row, col);
+  if (finderLayout === FINDER_LAYOUT_TWO_TOP) return !inBottomFinder(row, col);
+  return true;
+}
+
 export function isReserved(row, col) {
   return inFinder(row, col) || row === TIMING_INDEX || col === TIMING_INDEX;
 }
@@ -73,6 +104,15 @@ export const ENCODED_CELLS = Object.freeze(
     .filter(([row, col]) => isReserved(row, col) || PAYLOAD_CELLS.some(([payloadRow, payloadCol]) => payloadRow === row && payloadCol === col)),
 );
 
+export function encodedCells(finderLayout = FINDER_LAYOUT_FOUR) {
+  validateFinderLayout(finderLayout);
+  if (finderLayout === FINDER_LAYOUT_FOUR) return ENCODED_CELLS;
+  const omitted = finderLayout === FINDER_LAYOUT_TWO_TOP
+    ? inBottomFinder
+    : inBottomRightFinder;
+  return ENCODED_CELLS.filter(([row, col]) => !omitted(row, col));
+}
+
 export function crcInput(version, frameSeq, timestampMs) {
   return Uint8Array.from([
     version & 0x0f,
@@ -85,7 +125,13 @@ export function crcInput(version, frameSeq, timestampMs) {
   ]);
 }
 
-export function encodeGrid(frameSeq, timestampMs, version = VERSION) {
+export function encodeGrid(
+  frameSeq,
+  timestampMs,
+  version = VERSION,
+  finderLayout = FINDER_LAYOUT_FOUR,
+) {
+  validateFinderLayout(finderLayout);
   if (!Number.isInteger(version) || version < 0 || version > 0x0f) throw new RangeError('version must fit in 4 bits');
   if (!Number.isInteger(frameSeq) || frameSeq < 0 || frameSeq > 0xffff) throw new RangeError('frameSeq must fit in 16 bits');
   if (!Number.isInteger(timestampMs) || timestampMs < 0 || timestampMs > 0xffffffff) throw new RangeError('timestampMs must fit in 32 bits');
@@ -99,7 +145,7 @@ export function encodeGrid(frameSeq, timestampMs, version = VERSION) {
   const grid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
   for (let row = 0; row < GRID_SIZE; row += 1) {
     for (let col = 0; col < GRID_SIZE; col += 1) {
-      if (inFinder(row, col)) grid[row][col] = finderBit(row, col);
+      if (inActiveFinder(row, col, finderLayout)) grid[row][col] = finderBit(row, col);
       else if (row === TIMING_INDEX) grid[row][col] = col % 2;
       else if (col === TIMING_INDEX) grid[row][col] = row % 2;
     }
@@ -119,13 +165,14 @@ function validateGrid(grid) {
   }
 }
 
-export function structureErrors(grid) {
+export function structureErrors(grid, finderLayout = FINDER_LAYOUT_FOUR) {
   validateGrid(grid);
+  validateFinderLayout(finderLayout);
   let finderErrors = 0;
   let timingErrors = 0;
   for (let row = 0; row < GRID_SIZE; row += 1) {
     for (let col = 0; col < GRID_SIZE; col += 1) {
-      if (inFinder(row, col)) finderErrors += Number(grid[row][col] !== finderBit(row, col));
+      if (inActiveFinder(row, col, finderLayout)) finderErrors += Number(grid[row][col] !== finderBit(row, col));
       else if (row === TIMING_INDEX) timingErrors += Number(grid[row][col] !== col % 2);
       else if (col === TIMING_INDEX) timingErrors += Number(grid[row][col] !== row % 2);
     }
@@ -135,9 +182,14 @@ export function structureErrors(grid) {
 
 export function decodeGrid(
   grid,
-  { maxFinderErrors = 8, maxTimingErrors = 10, supportedVersion = VERSION } = {},
+  {
+    maxFinderErrors = 8,
+    maxTimingErrors = 10,
+    supportedVersion = VERSION,
+    finderLayout = FINDER_LAYOUT_FOUR,
+  } = {},
 ) {
-  const { finderErrors, timingErrors } = structureErrors(grid);
+  const { finderErrors, timingErrors } = structureErrors(grid, finderLayout);
   if (finderErrors > maxFinderErrors || timingErrors > maxTimingErrors) {
     throw new OrtmDecodeError('structure-mismatch', { finderErrors, timingErrors });
   }

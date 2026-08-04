@@ -473,7 +473,7 @@
       import { resolveClockSyncEndpoint } from './vendor/ortm/clock-source.js';
       import { DEFAULT_RASTER_PROFILE, buildReadRoi, decodeRgbaImage } from './vendor/ortm/raster.js';
 
-      const BUILD_VERSION = '2026-08-04-three-finder-live';
+      const BUILD_VERSION = '2026-08-04-two-top-live';
       const logEl = document.getElementById('log');
       const logPanelEl = document.getElementById('logPanel');
       const slotsEl = document.getElementById('slots');
@@ -504,6 +504,13 @@
           cell: 8,
           padding: 16,
           finderLayout: 'three',
+        },
+        '720p-two-top': {
+          x: 32,
+          y: 32,
+          cell: 8,
+          padding: 16,
+          finderLayout: 'two-top',
         },
       };
       let ORTM_CONFIG;
