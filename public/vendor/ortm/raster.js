@@ -1,10 +1,11 @@
 import {
   GRID_SIZE,
+  FINDER_LAYOUT_FOUR,
   OrtmDecodeError,
   decodeGrid,
   finderBit,
   frameAgeMs,
-  inFinder,
+  inActiveFinder,
   structureErrors,
 } from './ortm.js';
 
@@ -20,6 +21,7 @@ export const DEFAULT_RASTER_PROFILE = Object.freeze({
   maxFinderErrors: 8,
   maxTimingErrors: 10,
   maxAgeMs: 5000,
+  finderLayout: FINDER_LAYOUT_FOUR,
 });
 
 function median(values) {
@@ -117,7 +119,7 @@ export function decodeRgbaImage(
     const finderWhite = [];
     for (let row = 0; row < GRID_SIZE; row += 1) {
       for (let col = 0; col < GRID_SIZE; col += 1) {
-        if (!inFinder(row, col)) continue;
+        if (!inActiveFinder(row, col, profile.finderLayout ?? FINDER_LAYOUT_FOUR)) continue;
         (finderBit(row, col) ? finderBlack : finderWhite).push(luma[row][col]);
       }
     }
@@ -126,7 +128,8 @@ export function decodeRgbaImage(
     const threshold = (blackLevel + whiteLevel) / 2;
     const contrast = whiteLevel - blackLevel;
     const grid = luma.map((row) => row.map((value) => Number(value < threshold)));
-    const errors = structureErrors(grid);
+    const finderLayout = profile.finderLayout ?? FINDER_LAYOUT_FOUR;
+    const errors = structureErrors(grid, finderLayout);
     const score = errors.finderErrors * 4 + errors.timingErrors * 2 - Math.max(contrast, 0) / 32;
     const details = {
       ok: false,
@@ -153,6 +156,7 @@ export function decodeRgbaImage(
       marker = decodeGrid(grid, {
         maxFinderErrors: profile.maxFinderErrors ?? DEFAULT_RASTER_PROFILE.maxFinderErrors,
         maxTimingErrors: profile.maxTimingErrors ?? DEFAULT_RASTER_PROFILE.maxTimingErrors,
+        finderLayout,
       });
       rawAgeMs = (((Number(nowMs) >>> 0) - marker.timestampMs) | 0);
       const latencyMs = frameAgeMs(nowMs, marker.timestampMs, {

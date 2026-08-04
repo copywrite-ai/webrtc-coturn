@@ -7,15 +7,16 @@ from statistics import median
 from typing import Sequence
 
 from .codec import (
-    ENCODED_CELLS,
+    FINDER_LAYOUT_FOUR,
     FINDER_SIZE,
     GRID_SIZE,
     DecodeError,
     DecodedMarker,
     decode_grid,
+    encoded_cells,
     encode_grid,
     finder_bit,
-    in_finder,
+    in_active_finder,
 )
 
 
@@ -56,9 +57,14 @@ def render_luma_frame(
     background: int = 127,
     black: int = 0,
     white: int = 255,
+    finder_layout: str = FINDER_LAYOUT_FOUR,
 ) -> list[list[int]]:
     frame = [[background for _ in range(width)] for _ in range(height)]
-    grid = encode_grid(frame_seq, timestamp_ms)
+    grid = encode_grid(
+        frame_seq,
+        timestamp_ms,
+        finder_layout=finder_layout,
+    )
     if profile.x < 0 or profile.y < 0 or profile.x + profile.box_size > width or profile.y + profile.box_size > height:
         raise ValueError("marker does not fit in frame")
 
@@ -72,7 +78,7 @@ def render_luma_frame(
 
     origin_x = profile.x + profile.padding
     origin_y = profile.y + profile.padding
-    for row, col in ENCODED_CELLS:
+    for row, col in encoded_cells(finder_layout):
         value = black if grid[row][col] else white
         x0 = int(round(origin_x + col * profile.cell))
         x1 = int(round(origin_x + (col + 1) * profile.cell))
@@ -126,6 +132,7 @@ def decode_luma_frame(
     scales: Sequence[float] = DEFAULT_SCALES,
     offsets: Sequence[int] = DEFAULT_OFFSETS,
     min_contrast: float = 32,
+    finder_layout: str = FINDER_LAYOUT_FOUR,
 ) -> RasterDecode:
     if not frame or not frame[0] or any(len(row) != len(frame[0]) for row in frame):
         raise DecodeError("invalid-frame")
@@ -146,7 +153,7 @@ def decode_luma_frame(
         finder_white: list[float] = []
         for row in range(GRID_SIZE):
             for col in range(GRID_SIZE):
-                if not in_finder(row, col):
+                if not in_active_finder(row, col, finder_layout):
                     continue
                 target = finder_black if finder_bit(row, col) else finder_white
                 target.append(luma[row][col])
@@ -160,7 +167,7 @@ def decode_luma_frame(
 
         grid = [[int(luma[row][col] < threshold) for col in range(GRID_SIZE)] for row in range(GRID_SIZE)]
         try:
-            marker = decode_grid(grid)
+            marker = decode_grid(grid, finder_layout=finder_layout)
         except DecodeError as error:
             best_error = error
             continue

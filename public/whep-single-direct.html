@@ -779,7 +779,7 @@
       import { resolveClockSyncEndpoint } from './vendor/ortm/clock-source.js?v=2026-07-31-tailscale-clock-map';
       import { DEFAULT_RASTER_PROFILE, buildReadRoi, decodeRgbaImage } from './vendor/ortm/raster.js';
 
-      const BUILD_VERSION = '2026-08-04-receive-bitrate-v17';
+      const BUILD_VERSION = '2026-08-04-ortm-720p-profile-v19';
       const logEl = document.getElementById('log');
       const logPanelEl = document.getElementById('logPanel');
       const slotsEl = document.getElementById('slots');
@@ -799,8 +799,17 @@
         params.get('whep') ||
         params.get('whep1') ||
         'http://127.0.0.1:9001/fish_front/whep';
+      const ortmProfileName = params.get('ortmProfile') || 'default';
+      const ortmProfiles = {
+        default: { cell: 12, padding: 12 },
+        compact: { cell: 8, padding: 8 },
+        small: { cell: 6, padding: 6 },
+        '720p-minimal': { x: 32, y: 32, cell: 8, padding: 16 },
+      };
+      const ortmProfile = ortmProfiles[ortmProfileName] || ortmProfiles.default;
       const ORTM_CONFIG = {
         ...DEFAULT_RASTER_PROFILE,
+        ...ortmProfile,
         scales: [1.0, 0.95, 1.05, 0.9, 1.1, 2.0, 1.9, 2.1],
         offsets: [0, -4, 4],
       };
@@ -2026,7 +2035,8 @@
       log(
         `single direct viewer ready clockSync=${clockSyncEnabled
           ? (clockSyncOverride ? `override:${absoluteUrl(clockSyncOverride)}` : 'auto-from-whep-origin')
-          : 'off'}`,
+          : 'off'} ortmProfile=${ortmProfileName in ortmProfiles ? ortmProfileName : 'default'} ` +
+          `ortmCell=${ORTM_CONFIG.cell} ortmPadding=${ORTM_CONFIG.padding}`,
       );
     </script>
   </body>

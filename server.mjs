@@ -3,8 +3,17 @@ import { createHmac } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { appendFile, readFile } from 'node:fs/promises';
 import { request as httpsRequest } from 'node:https';
-import { extname, join, posix as pathPosix } from 'node:path';
+import { extname, join } from 'node:path';
 import { WebSocketServer } from 'ws';
+import {
+  mapUpstreamPathToPublic,
+  relativeLocationForClient,
+} from './media-proxy-location.mjs';
+import {
+  authorizeViewerControl,
+  validateViewerCommand,
+  ViewerControlHub,
+} from './viewer-control.mjs';
 
 loadDotEnv();
 
@@ -14,6 +23,7 @@ const MEDIAMTX_ORIGIN = process.env.MEDIAMTX_ORIGIN || 'http://127.0.0.1:8889';
 const MEDIAMTX_PATH_PREFIX = process.env.MEDIAMTX_PATH_PREFIX || '';
 const DEVICE_DOMAIN_SUFFIX = process.env.DEVICE_DOMAIN_SUFFIX || '.beago-fish.ts.net';
 const CLIENT_LOG_PATH = process.env.CLIENT_LOG_PATH || join(process.cwd(), 'client-events.log');
+const VIEWER_CONTROL_TOKEN = process.env.VIEWER_CONTROL_TOKEN || '';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -71,6 +81,28 @@ function parsePositiveInt(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function resolveTurnExpiresAt(ttlSeconds) {
+  const fixedExpiresAt = parsePositiveInt(process.env.TURN_EXPIRES_AT, 0);
+  if (fixedExpiresAt) {
+    return fixedExpiresAt;
+  }
+
+  if (process.env.TURN_EXPIRES_MODE === 'daily') {
+    const now = new Date();
+    const tomorrowUtc = Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + 1,
+      0,
+      0,
+      0,
+    );
+    return Math.floor(tomorrowUtc / 1000);
+  }
+
+  return Math.floor(Date.now() / 1000) + ttlSeconds;
+}
+
 function buildTemporaryTurnAuth(prefix = '') {
   const secret = process.env[`${prefix}SHARED_SECRET`] || process.env.TURN_SHARED_SECRET || '';
   if (!secret) {
@@ -82,7 +114,7 @@ function buildTemporaryTurnAuth(prefix = '') {
     24 * 60 * 60,
   );
   const usernameSuffix = process.env[`${prefix}USERNAME_SUFFIX`] || process.env.TURN_USERNAME_SUFFIX || 'client';
-  const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+  const expiresAt = resolveTurnExpiresAt(ttlSeconds);
   const username = `${expiresAt}:${usernameSuffix}`;
   const credential = createHmac('sha1', secret).update(username).digest('base64');
   return { username, credential };
@@ -172,11 +204,13 @@ function resolveMediaUpstream(requestUrl) {
     const [, rest = ''] = onlineMatch;
     const prefix = normalizePathPrefix(MEDIAMTX_PATH_PREFIX);
     const normalizedRest = String(rest || '').replace(/^\/+/, '');
+    const upstreamPrefix = `${prefix}/online`;
     const targetPath = normalizedRest
-      ? `${prefix}/online/${normalizedRest}${requestUrl.search}`
-      : `${prefix}/online${requestUrl.search}`;
+      ? `${upstreamPrefix}/${normalizedRest}${requestUrl.search}`
+      : `${upstreamPrefix}${path.endsWith('/') ? '/' : ''}${requestUrl.search}`;
     return {
       publicPrefix: '/online',
+      upstreamPrefix,
       upstreamUrl: new URL(targetPath, MEDIAMTX_ORIGIN),
     };
   }
@@ -186,11 +220,13 @@ function resolveMediaUpstream(requestUrl) {
     const [, rest = ''] = offlineAliasMatch;
     const prefix = normalizePathPrefix(MEDIAMTX_PATH_PREFIX);
     const normalizedRest = String(rest || '').replace(/^\/+/, '');
+    const upstreamPrefix = `${prefix}/online`;
     const targetPath = normalizedRest
-      ? `${prefix}/online/${normalizedRest}${requestUrl.search}`
-      : `${prefix}/online${requestUrl.search}`;
+      ? `${upstreamPrefix}/${normalizedRest}${requestUrl.search}`
+      : `${upstreamPrefix}${path.endsWith('/') ? '/' : ''}${requestUrl.search}`;
     return {
       publicPrefix: '/online',
+      upstreamPrefix,
       upstreamUrl: new URL(targetPath, MEDIAMTX_ORIGIN),
     };
   }
@@ -200,11 +236,13 @@ function resolveMediaUpstream(requestUrl) {
     const [, stream, rest = ''] = fishMatch;
     const prefix = normalizePathPrefix(MEDIAMTX_PATH_PREFIX);
     const normalizedRest = String(rest || '').replace(/^\/+/, '');
+    const upstreamPrefix = `${prefix}/${stream}`;
     const targetPath = normalizedRest
-      ? `${prefix}/${stream}/${normalizedRest}${requestUrl.search}`
-      : `${prefix}/${stream}${requestUrl.search}`;
+      ? `${upstreamPrefix}/${normalizedRest}${requestUrl.search}`
+      : `${upstreamPrefix}${path.endsWith('/') ? '/' : ''}${requestUrl.search}`;
     return {
       publicPrefix: `/${stream}`,
+      upstreamPrefix,
       upstreamUrl: new URL(targetPath, MEDIAMTX_ORIGIN),
     };
   }
@@ -216,6 +254,7 @@ function resolveMediaUpstream(requestUrl) {
     if (origin) {
       return {
         publicPrefix: `/mtx/${device}`,
+        upstreamPrefix: '/mtx',
         upstreamUrl: new URL(`/mtx/${stream}/${action}${tail}${requestUrl.search}`, origin),
       };
     }
@@ -225,22 +264,17 @@ function resolveMediaUpstream(requestUrl) {
   const prefix = normalizePathPrefix(MEDIAMTX_PATH_PREFIX);
   return {
     publicPrefix: '/mtx',
+    upstreamPrefix: prefix,
     upstreamUrl: new URL(`${prefix}${relativePath}${requestUrl.search}`, MEDIAMTX_ORIGIN),
   };
 }
 
 function rewriteLocationForClient(requestPath, targetPath, search = '') {
-  const currentPath = String(requestPath || '/');
-  const target = String(targetPath || '/');
-  const baseDir = currentPath.endsWith('/')
-    ? currentPath
-    : currentPath.slice(0, currentPath.lastIndexOf('/') + 1) || '/';
-  const relativePath = pathPosix.relative(baseDir, target) || '.';
-  return `${relativePath}${search}`;
+  return relativeLocationForClient(requestPath, targetPath, search);
 }
 
 function proxyToMediaMTX(req, res, requestUrl) {
-  const { upstreamUrl, publicPrefix } = resolveMediaUpstream(requestUrl);
+  const { upstreamUrl, publicPrefix, upstreamPrefix } = resolveMediaUpstream(requestUrl);
   const headers = { ...req.headers };
   headers.host = upstreamUrl.host;
   const requestImpl = upstreamUrl.protocol === 'https:' ? httpsRequest : httpRequest;
@@ -253,9 +287,11 @@ function proxyToMediaMTX(req, res, requestUrl) {
     const location = upstreamRes.headers.location;
     if (location) {
       const absolute = new URL(location, upstreamUrl);
-      const rewrittenPath = absolute.pathname.startsWith('/mtx/')
-        ? `${publicPrefix}${absolute.pathname.slice('/mtx'.length)}`
-        : `${publicPrefix}${absolute.pathname}`;
+      const rewrittenPath = mapUpstreamPathToPublic(
+        publicPrefix,
+        upstreamPrefix,
+        absolute.pathname,
+      );
       responseHeaders.location = rewriteLocationForClient(
         requestUrl.pathname,
         rewrittenPath,
@@ -308,9 +344,112 @@ async function handleClientLog(req, res) {
   res.end();
 }
 
+function writeClockSyncHeaders(res, contentType = 'application/json; charset=utf-8') {
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Accept, Cache-Control');
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
+}
+
+function handleClockSync(req, res, requestUrl) {
+  if (req.method === 'OPTIONS') {
+    writeClockSyncHeaders(res);
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  if (req.method !== 'GET') {
+    writeClockSyncHeaders(res);
+    res.writeHead(405, { Allow: 'GET, OPTIONS' });
+    res.end(JSON.stringify({ ok: false, error: 'method-not-allowed' }));
+    return;
+  }
+
+  const receiveUnixMs = Date.now();
+  const receiveMonotonicNs = process.hrtime.bigint();
+  const sendUnixMs = Date.now();
+  const sendMonotonicNs = process.hrtime.bigint();
+  const payload = {
+    ok: true,
+    version: 1,
+    requestId: requestUrl.searchParams.get('requestId') || null,
+    serverReceiveUnixMs: receiveUnixMs,
+    serverSendUnixMs: sendUnixMs,
+    serverProcessingMs: Number(sendMonotonicNs - receiveMonotonicNs) / 1e6,
+  };
+  writeClockSyncHeaders(res);
+  res.writeHead(200);
+  res.end(JSON.stringify(payload));
+}
+
+function writeJson(res, statusCode, payload) {
+  res.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+  });
+  res.end(JSON.stringify(payload));
+}
+
+const viewerControlHub = new ViewerControlHub();
+
+async function handleViewerControl(req, res, requestUrl) {
+  if (!VIEWER_CONTROL_TOKEN) {
+    writeJson(res, 503, { ok: false, error: 'viewer control is disabled' });
+    return;
+  }
+  if (!authorizeViewerControl(req, VIEWER_CONTROL_TOKEN)) {
+    writeJson(res, 401, { ok: false, error: 'unauthorized' });
+    return;
+  }
+
+  if (req.method === 'GET' && requestUrl.pathname === '/api/viewer-control/clients') {
+    writeJson(res, 200, { ok: true, clients: viewerControlHub.list() });
+    return;
+  }
+
+  if (req.method !== 'POST' || requestUrl.pathname !== '/api/viewer-control/command') {
+    writeJson(res, 405, { ok: false, error: 'method-not-allowed' });
+    return;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(await readRequestBody(req) || '{}');
+  } catch {
+    writeJson(res, 400, { ok: false, error: 'invalid json' });
+    return;
+  }
+
+  try {
+    const command = validateViewerCommand(payload.command || payload);
+    const peerId = String(payload.peerId || '').trim();
+    const delivered = viewerControlHub.dispatch(command, peerId);
+    writeJson(res, delivered ? 202 : 409, {
+      ok: delivered > 0,
+      requestId: command.requestId,
+      delivered,
+      error: delivered ? null : 'no matching remote-control viewer',
+    });
+  } catch (error) {
+    writeJson(res, 400, { ok: false, error: error.message });
+  }
+}
+
 const server = createServer(async (req, res) => {
   try {
     const requestUrl = new URL(req.url || '/', 'http://localhost');
+    if (requestUrl.pathname === '/api/clock-sync') {
+      handleClockSync(req, res, requestUrl);
+      return;
+    }
+    if (requestUrl.pathname.startsWith('/api/viewer-control/')) {
+      await handleViewerControl(req, res, requestUrl);
+      return;
+    }
     if (requestUrl.pathname === '/offline') {
       res.writeHead(302, {
         Location: rewriteLocationForClient(requestUrl.pathname, '/online/', requestUrl.search),
@@ -399,6 +538,33 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (msg.type === 'viewer-control-register') {
+      if (!VIEWER_CONTROL_TOKEN) {
+        ws.send(JSON.stringify({ type: 'viewer-control-disabled' }));
+        return;
+      }
+      const registeredPeerId = viewerControlHub.register(ws, {
+        peerId: msg.peerId,
+        page: msg.page,
+      });
+      ws.send(JSON.stringify({
+        type: 'viewer-control-registered',
+        peerId: registeredPeerId,
+      }));
+      log('viewer control registered', `peer=${registeredPeerId}`, `remote=${remoteAddr}`);
+      return;
+    }
+
+    if (msg.type === 'viewer-control-result') {
+      viewerControlHub.recordResult(ws, msg.result || {});
+      log(
+        'viewer control result',
+        `request=${String(msg.result?.requestId || '-')}`,
+        `ok=${Boolean(msg.result?.ok)}`,
+      );
+      return;
+    }
+
     if (!roomId || !peerId) return;
 
     if (msg.type === 'signal' && msg.to) {
@@ -422,6 +588,7 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    viewerControlHub.remove(ws);
     if (!roomId || !peerId) return;
     const room = rooms.get(roomId);
     if (!room) return;

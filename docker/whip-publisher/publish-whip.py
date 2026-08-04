@@ -16,8 +16,14 @@ gi.require_version("GLib", "2.0")
 import cairo
 from gi.repository import GLib, Gst  # noqa: E402
 
-from ortm.codec import ENCODED_CELLS as ORTM_ENCODED_CELLS
-from ortm.codec import GRID_SIZE, VERSION as ORTM_VERSION, encode_grid
+from ortm.codec import (
+    FINDER_LAYOUT_FOUR,
+    GRID_SIZE,
+    VERSION as ORTM_VERSION,
+    encode_grid,
+    encoded_cells,
+    validate_finder_layout,
+)
 
 
 def env_required(name):
@@ -165,6 +171,8 @@ class ORTMOverlayRenderer:
         draw_timestamp_text,
         background_alpha,
         cell_alpha,
+        border_alpha,
+        finder_layout,
     ):
         self.x = x
         self.y = y
@@ -176,6 +184,10 @@ class ORTMOverlayRenderer:
         self.draw_timestamp_text = draw_timestamp_text
         self.background_alpha = max(0.0, min(background_alpha, 1.0))
         self.cell_alpha = max(0.0, min(cell_alpha, 1.0))
+        self.border_alpha = max(0.0, min(border_alpha, 1.0))
+        validate_finder_layout(finder_layout)
+        self.finder_layout = finder_layout
+        self.encoded_cells = encoded_cells(finder_layout)
         self.render_stats = StatsWindow()
         self.frame_markers_by_pts = {}
         self.frame_marker_order = deque()
@@ -225,7 +237,12 @@ class ORTMOverlayRenderer:
         self.frame_seq = (self.frame_seq + 1) & 0xFFFF
         timestamp_ms_full = wallclock_ms()
         timestamp_ms_low32 = timestamp_ms_full & 0xFFFFFFFF
-        ortm_bits = encode_grid(current_frame_seq, timestamp_ms_low32, ORTM_VERSION)
+        ortm_bits = encode_grid(
+            current_frame_seq,
+            timestamp_ms_low32,
+            ORTM_VERSION,
+            finder_layout=self.finder_layout,
+        )
 
         context.save()
         try:
@@ -245,7 +262,7 @@ class ORTMOverlayRenderer:
                 for col in range(GRID_SIZE):
                     if (
                         ortm_bits[row][col] != 0
-                        or (row, col) not in ORTM_ENCODED_CELLS
+                        or (row, col) not in self.encoded_cells
                     ):
                         continue
                     context.rectangle(
@@ -269,9 +286,10 @@ class ORTMOverlayRenderer:
                     )
             context.fill()
 
-            context.set_source_rgb(0.0, 0.0, 0.0)
-            context.rectangle(self.x, self.y, self.marker_size, self.marker_size)
-            context.stroke()
+            if self.border_alpha > 0:
+                context.set_source_rgba(0.0, 0.0, 0.0, self.border_alpha)
+                context.rectangle(self.x, self.y, self.marker_size, self.marker_size)
+                context.stroke()
 
             if self.draw_timestamp_text:
                 label = timestamp_text(self.timezone)
@@ -335,6 +353,7 @@ def build_pipeline_description(
     video_source_fps,
     source_pipeline,
     pattern,
+    testsrc_horizontal_speed,
     width,
     height,
     fps,
@@ -365,7 +384,10 @@ def build_pipeline_description(
     if source_pipeline:
         source_description = source_pipeline
     elif video_source == "testsrc":
-        source_description = f"videotestsrc is-live=true pattern={gst_quote(pattern)}"
+        source_description = (
+            f"videotestsrc is-live=true pattern={gst_quote(pattern)} "
+            f"horizontal-speed={testsrc_horizontal_speed}"
+        )
     elif video_source == "avf":
         source_caps = ""
         if video_source_width is not None and video_source_height is not None:
@@ -441,7 +463,8 @@ def main():
             video_source_height = 480
     source_pipeline = env_optional_value("SOURCE_PIPELINE")
     source_mode = "pipeline" if source_pipeline else video_source
-    pattern = env_value("PATTERN", "smpte")
+    pattern = env_value("PATTERN", "checkers-8")
+    testsrc_horizontal_speed = env_int("TESTSRC_HORIZONTAL_SPEED", 2)
     speed_preset = env_value("SPEED_PRESET", "ultrafast")
     x264_option_string = env_value(
         "X264_OPTION_STRING", "nal-hrd=cbr:force-cfr=1:filler=1"
@@ -491,6 +514,9 @@ def main():
     ortm_padding = env_int("ORTM_PADDING", 12)
     ortm_background_alpha = env_float("ORTM_BACKGROUND_ALPHA", 1.0)
     ortm_cell_alpha = env_float("ORTM_CELL_ALPHA", 1.0)
+    ortm_border_alpha = env_float("ORTM_BORDER_ALPHA", 1.0)
+    ortm_finder_layout = env_value("ORTM_FINDER_LAYOUT", FINDER_LAYOUT_FOUR)
+    validate_finder_layout(ortm_finder_layout)
 
     base_url = whip_base_url.rstrip("/")
     if whip_include_device == "1":
@@ -575,6 +601,8 @@ def main():
     )
     print(f"  ortm bg alpha: {max(0.0, min(ortm_background_alpha, 1.0)):.2f}", flush=True)
     print(f"  ortm cell alpha: {max(0.0, min(ortm_cell_alpha, 1.0)):.2f}", flush=True)
+    print(f"  ortm border alpha: {max(0.0, min(ortm_border_alpha, 1.0)):.2f}", flush=True)
+    print(f"  ortm finders : {ortm_finder_layout}", flush=True)
     print(
         f"  timestamp    : {'wallclock text below marker' if timestamp_overlay == '1' else '<off>'}",
         flush=True,
@@ -624,6 +652,7 @@ def main():
         video_source_fps=video_source_fps,
         source_pipeline=source_pipeline,
         pattern=pattern,
+        testsrc_horizontal_speed=testsrc_horizontal_speed,
         width=width,
         height=height,
         fps=fps,
@@ -656,6 +685,8 @@ def main():
         draw_timestamp_text=timestamp_overlay == "1",
         background_alpha=ortm_background_alpha,
         cell_alpha=ortm_cell_alpha,
+        border_alpha=ortm_border_alpha,
+        finder_layout=ortm_finder_layout,
     )
     overlay.connect("draw", renderer.draw)
 

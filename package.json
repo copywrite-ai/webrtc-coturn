@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
+    "test": "node --test",
     "docker:up": "docker compose up --build -d",
     "docker:down": "docker compose down"
   },

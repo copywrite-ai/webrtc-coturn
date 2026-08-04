@@ -507,8 +507,23 @@ function prometheusSnapshot() {
     if (isMetricNumber(viewer.ortm)) {
       lines.push(`tunnel_viewer_slot_ortm_ms{${label}} ${Number(viewer.ortm)}`);
     }
+    if (isMetricNumber(viewer.ortmRaw)) {
+      lines.push(`tunnel_viewer_slot_ortm_raw_ms{${label}} ${Number(viewer.ortmRaw)}`);
+    }
     if (isMetricNumber(viewer.ortmNet)) {
       lines.push(`tunnel_viewer_slot_ortm_net_ms{${label}} ${Number(viewer.ortmNet)}`);
+    }
+    if (isMetricNumber(viewer.clockOffset)) {
+      lines.push(`tunnel_viewer_slot_clock_offset_ms{${label}} ${Number(viewer.clockOffset)}`);
+    }
+    if (isMetricNumber(viewer.clockRtt)) {
+      lines.push(`tunnel_viewer_slot_clock_rtt_ms{${label}} ${Number(viewer.clockRtt)}`);
+    }
+    if (isMetricNumber(viewer.clockUncertainty)) {
+      lines.push(`tunnel_viewer_slot_clock_uncertainty_ms{${label}} ${Number(viewer.clockUncertainty)}`);
+    }
+    if (isMetricNumber(viewer.clockSamples)) {
+      lines.push(`tunnel_viewer_slot_clock_samples{${label}} ${Number(viewer.clockSamples)}`);
     }
     if (isMetricNumber(viewer.ortmDecodeAttempts)) {
       lines.push(`tunnel_viewer_slot_ortm_decode_attempts{${label}} ${Number(viewer.ortmDecodeAttempts)}`);

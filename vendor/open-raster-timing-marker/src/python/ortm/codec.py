@@ -11,6 +11,9 @@ TIMING_INDEX = 4
 VERSION = 0
 PAYLOAD_BITS = 4 + 16 + 32 + 16
 UINT32_MASK = 0xFFFFFFFF
+FINDER_LAYOUT_FOUR = "four"
+FINDER_LAYOUT_THREE = "three"
+FINDER_LAYOUTS = frozenset((FINDER_LAYOUT_FOUR, FINDER_LAYOUT_THREE))
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,27 @@ def in_finder(row: int, col: int) -> bool:
     )
 
 
+def in_bottom_right_finder(row: int, col: int) -> bool:
+    return row >= GRID_SIZE - FINDER_SIZE and col >= GRID_SIZE - FINDER_SIZE
+
+
+def validate_finder_layout(finder_layout: str) -> None:
+    if finder_layout not in FINDER_LAYOUTS:
+        raise ValueError(f"unsupported finder layout {finder_layout!r}")
+
+
+def in_active_finder(
+    row: int,
+    col: int,
+    finder_layout: str = FINDER_LAYOUT_FOUR,
+) -> bool:
+    validate_finder_layout(finder_layout)
+    return in_finder(row, col) and not (
+        finder_layout == FINDER_LAYOUT_THREE
+        and in_bottom_right_finder(row, col)
+    )
+
+
 def is_reserved(row: int, col: int) -> bool:
     return in_finder(row, col) or row == TIMING_INDEX or col == TIMING_INDEX
 
@@ -89,6 +113,19 @@ ENCODED_CELLS = frozenset(
     [(row, col) for row in range(GRID_SIZE) for col in range(GRID_SIZE) if is_reserved(row, col)]
     + list(PAYLOAD_CELLS)
 )
+
+
+def encoded_cells(
+    finder_layout: str = FINDER_LAYOUT_FOUR,
+) -> frozenset[tuple[int, int]]:
+    validate_finder_layout(finder_layout)
+    if finder_layout == FINDER_LAYOUT_FOUR:
+        return ENCODED_CELLS
+    return frozenset(
+        (row, col)
+        for row, col in ENCODED_CELLS
+        if not in_bottom_right_finder(row, col)
+    )
 
 
 def crc_input(version: int, frame_seq: int, timestamp_ms: int) -> bytes:
@@ -122,13 +159,20 @@ def payload(version: int, frame_seq: int, timestamp_ms: int) -> tuple[list[int],
     return bits, checksum
 
 
-def encode_grid(frame_seq: int, timestamp_ms: int, version: int = VERSION) -> list[list[int]]:
+def encode_grid(
+    frame_seq: int,
+    timestamp_ms: int,
+    version: int = VERSION,
+    *,
+    finder_layout: str = FINDER_LAYOUT_FOUR,
+) -> list[list[int]]:
+    validate_finder_layout(finder_layout)
     payload_bits, _ = payload(version, frame_seq, timestamp_ms)
     grid = [[0] * GRID_SIZE for _ in range(GRID_SIZE)]
 
     for row in range(GRID_SIZE):
         for col in range(GRID_SIZE):
-            if in_finder(row, col):
+            if in_active_finder(row, col, finder_layout):
                 grid[row][col] = finder_bit(row, col)
             elif row == TIMING_INDEX:
                 grid[row][col] = col % 2
@@ -147,13 +191,18 @@ def validate_grid_shape(grid: Sequence[Sequence[int]]) -> None:
         raise DecodeError("invalid-grid-bit")
 
 
-def structure_errors(grid: Sequence[Sequence[int]]) -> tuple[int, int]:
+def structure_errors(
+    grid: Sequence[Sequence[int]],
+    *,
+    finder_layout: str = FINDER_LAYOUT_FOUR,
+) -> tuple[int, int]:
+    validate_finder_layout(finder_layout)
     finder_errors = 0
     timing_errors = 0
     for row in range(GRID_SIZE):
         for col in range(GRID_SIZE):
             bit = int(grid[row][col])
-            if in_finder(row, col):
+            if in_active_finder(row, col, finder_layout):
                 finder_errors += int(bit != finder_bit(row, col))
             elif row == TIMING_INDEX:
                 timing_errors += int(bit != col % 2)
@@ -168,9 +217,13 @@ def decode_grid(
     max_finder_errors: int = 8,
     max_timing_errors: int = 10,
     supported_version: int = VERSION,
+    finder_layout: str = FINDER_LAYOUT_FOUR,
 ) -> DecodedMarker:
     validate_grid_shape(grid)
-    finder_errors, timing_errors = structure_errors(grid)
+    finder_errors, timing_errors = structure_errors(
+        grid,
+        finder_layout=finder_layout,
+    )
     if finder_errors > max_finder_errors or timing_errors > max_timing_errors:
         raise DecodeError(
             "structure-mismatch",

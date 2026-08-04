@@ -13,6 +13,8 @@ services:
       DEFAULT_SERVER_BANDWIDTH_MBPS: "${DEFAULT_SERVER_BANDWIDTH_MBPS:-20}"
       TURN_SHARED_SECRET: "${TURN_SHARED_SECRET:-}"
       TURN_TTL_SECONDS: "${TURN_TTL_SECONDS:-86400}"
+      TURN_EXPIRES_MODE: "${TURN_EXPIRES_MODE:-}"
+      TURN_EXPIRES_AT: "${TURN_EXPIRES_AT:-}"
       TURN_USERNAME_SUFFIX: "${TURN_USERNAME_SUFFIX:-client}"
       TURN_PRESET_IP_LABEL: "${TURN_PRESET_IP_LABEL:-turn-ip.example.com}"
       TURN_PRESET_IP_URLS: "${TURN_PRESET_IP_URLS:-turn:turn-ip.example.com:3478?transport=udp,turn:turn-ip.example.com:3478?transport=tcp}"
@@ -30,6 +32,7 @@ services:
       DEFAULT_TURN_ONLY: "${DEFAULT_TURN_ONLY:-1}"
       DEFAULT_AUTO_START: "${DEFAULT_AUTO_START:-1}"
       CLIENT_LOG_PATH: "/app/logs/client-events.log"
+      VIEWER_CONTROL_TOKEN: "${VIEWER_CONTROL_TOKEN:-}"
     depends_on:
       - mediamtx
     volumes:
