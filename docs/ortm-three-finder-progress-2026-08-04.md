@@ -80,6 +80,23 @@ two-top 在 `checkers-8 -> GStreamer -> H.264 -> WHIP -> MediaMTX -> WHEP -> bro
 
 最终样本为 1280x720、60 fps，finder/timing error 均为 0，contrast 约 176.5。Publisher 实测约 2517 kbps，ORTM render 平均 0.2 ms，overlay-to-send 平均 2.3 ms。
 
+## Timing Column Alpha 边界
+
+为了降低 two-top 纵向 timing column 的视觉存在感，publisher 增加了独立参数 `ORTM_TIMING_COLUMN_ALPHA`。它只影响 `col == 4 && row != 4`，不改变 timing row、finder、payload、CRC 或固定 ROI 几何。未设置时继承 `ORTM_CELL_ALPHA`，因此默认行为保持不变。
+
+在其他条件保持不变时，通过 RemoteControl 重连并清空每轮统计：
+
+| Timing column alpha | 解码结果 | CRC 失败 | Freeze / Drop | 判定 |
+| ---: | ---: | ---: | ---: | --- |
+| 0.70 | 461 / 461 | 0 | 0 / 0 | 对照通过 |
+| 0.625 | 276 / 276 | 0 | 0 / 0 | 短窗口通过 |
+| 0.625 | 546 / 546 | 0 | 0 / 0 | 90 秒确认通过 |
+| 0.60625 | 224 / 254 | 30 | 9 / 2 | 失败 |
+| 0.5875 | 322 / 339 | 17 | 4 / 2 | 失败 |
+| 0.55 | 463 / 479 | 16 | 11 / 31 | 失败 |
+
+当前实验推荐值为 `0.625`。它不是通用安全下限；摄像头内容、其他编码器、弱网和 relay 仍需单独验证。低 alpha 下主要表现为 CRC failure，而非 structure failure，推测是 timing 证据变弱后候选定位或阈值选择不稳定，最终污染 payload 采样。
+
 ## 当前运行状态
 
 - `fish_front` 正在发布 two-top 滚动棋盘流。

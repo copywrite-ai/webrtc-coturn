@@ -779,7 +779,7 @@
       import { resolveClockSyncEndpoint } from './vendor/ortm/clock-source.js?v=2026-07-31-tailscale-clock-map';
       import { DEFAULT_RASTER_PROFILE, buildReadRoi, decodeRgbaImage } from './vendor/ortm/raster.js';
 
-      const BUILD_VERSION = '2026-08-04-ortm-720p-profile-v19';
+      const BUILD_VERSION = '2026-08-04-two-top-profile-v20';
       const logEl = document.getElementById('log');
       const logPanelEl = document.getElementById('logPanel');
       const slotsEl = document.getElementById('slots');
@@ -805,6 +805,13 @@
         compact: { cell: 8, padding: 8 },
         small: { cell: 6, padding: 6 },
         '720p-minimal': { x: 32, y: 32, cell: 8, padding: 16 },
+        '720p-two-top': {
+          x: 32,
+          y: 32,
+          cell: 8,
+          padding: 16,
+          finderLayout: 'two-top',
+        },
       };
       const ortmProfile = ortmProfiles[ortmProfileName] || ortmProfiles.default;
       const ORTM_CONFIG = {

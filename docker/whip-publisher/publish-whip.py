@@ -19,6 +19,7 @@ from gi.repository import GLib, Gst  # noqa: E402
 from ortm.codec import (
     FINDER_LAYOUT_FOUR,
     GRID_SIZE,
+    TIMING_INDEX,
     VERSION as ORTM_VERSION,
     encode_grid,
     encoded_cells,
@@ -171,6 +172,7 @@ class ORTMOverlayRenderer:
         draw_timestamp_text,
         background_alpha,
         cell_alpha,
+        timing_column_alpha,
         border_alpha,
         finder_layout,
     ):
@@ -184,6 +186,7 @@ class ORTMOverlayRenderer:
         self.draw_timestamp_text = draw_timestamp_text
         self.background_alpha = max(0.0, min(background_alpha, 1.0))
         self.cell_alpha = max(0.0, min(cell_alpha, 1.0))
+        self.timing_column_alpha = max(0.0, min(timing_column_alpha, 1.0))
         self.border_alpha = max(0.0, min(border_alpha, 1.0))
         validate_finder_layout(finder_layout)
         self.finder_layout = finder_layout
@@ -231,6 +234,37 @@ class ORTMOverlayRenderer:
         marker["pts_match_delta_ns"] = best_delta
         return marker
 
+    @staticmethod
+    def _is_timing_column_cell(row, col):
+        return col == TIMING_INDEX and row != TIMING_INDEX
+
+    def _draw_grid_cells(self, context, ortm_bits, bit, alpha, timing_column):
+        if alpha <= 0:
+            return
+        context.set_source_rgba(
+            0.0 if bit else 1.0,
+            0.0 if bit else 1.0,
+            0.0 if bit else 1.0,
+            alpha,
+        )
+        grid_origin_x = self.x + self.padding
+        grid_origin_y = self.y + self.padding
+        for row in range(GRID_SIZE):
+            for col in range(GRID_SIZE):
+                if (
+                    ortm_bits[row][col] != bit
+                    or (row, col) not in self.encoded_cells
+                    or self._is_timing_column_cell(row, col) != timing_column
+                ):
+                    continue
+                context.rectangle(
+                    grid_origin_x + col * self.cell,
+                    grid_origin_y + row * self.cell,
+                    self.cell,
+                    self.cell,
+                )
+        context.fill()
+
     def draw(self, _overlay, context, timestamp, _duration):
         started_at = monotonic_ns()
         current_frame_seq = self.frame_seq
@@ -254,37 +288,21 @@ class ORTMOverlayRenderer:
                 context.rectangle(self.x, self.y, self.marker_size, self.marker_size)
                 context.fill()
 
-            grid_origin_x = self.x + self.padding
-            grid_origin_y = self.y + self.padding
-
-            context.set_source_rgba(1.0, 1.0, 1.0, self.cell_alpha)
-            for row in range(GRID_SIZE):
-                for col in range(GRID_SIZE):
-                    if (
-                        ortm_bits[row][col] != 0
-                        or (row, col) not in self.encoded_cells
-                    ):
-                        continue
-                    context.rectangle(
-                        grid_origin_x + col * self.cell,
-                        grid_origin_y + row * self.cell,
-                        self.cell,
-                        self.cell,
-                    )
-            context.fill()
-
-            context.set_source_rgba(0.0, 0.0, 0.0, self.cell_alpha)
-            for row in range(GRID_SIZE):
-                for col in range(GRID_SIZE):
-                    if ortm_bits[row][col] != 1:
-                        continue
-                    context.rectangle(
-                        grid_origin_x + col * self.cell,
-                        grid_origin_y + row * self.cell,
-                        self.cell,
-                        self.cell,
-                    )
-            context.fill()
+            for bit in (0, 1):
+                self._draw_grid_cells(
+                    context,
+                    ortm_bits,
+                    bit,
+                    self.cell_alpha,
+                    False,
+                )
+                self._draw_grid_cells(
+                    context,
+                    ortm_bits,
+                    bit,
+                    self.timing_column_alpha,
+                    True,
+                )
 
             if self.border_alpha > 0:
                 context.set_source_rgba(0.0, 0.0, 0.0, self.border_alpha)
@@ -514,6 +532,9 @@ def main():
     ortm_padding = env_int("ORTM_PADDING", 12)
     ortm_background_alpha = env_float("ORTM_BACKGROUND_ALPHA", 1.0)
     ortm_cell_alpha = env_float("ORTM_CELL_ALPHA", 1.0)
+    ortm_timing_column_alpha = env_float(
+        "ORTM_TIMING_COLUMN_ALPHA", ortm_cell_alpha
+    )
     ortm_border_alpha = env_float("ORTM_BORDER_ALPHA", 1.0)
     ortm_finder_layout = env_value("ORTM_FINDER_LAYOUT", FINDER_LAYOUT_FOUR)
     validate_finder_layout(ortm_finder_layout)
@@ -601,6 +622,11 @@ def main():
     )
     print(f"  ortm bg alpha: {max(0.0, min(ortm_background_alpha, 1.0)):.2f}", flush=True)
     print(f"  ortm cell alpha: {max(0.0, min(ortm_cell_alpha, 1.0)):.2f}", flush=True)
+    print(
+        "  ortm timing column alpha: "
+        f"{max(0.0, min(ortm_timing_column_alpha, 1.0)):.2f}",
+        flush=True,
+    )
     print(f"  ortm border alpha: {max(0.0, min(ortm_border_alpha, 1.0)):.2f}", flush=True)
     print(f"  ortm finders : {ortm_finder_layout}", flush=True)
     print(
@@ -685,6 +711,7 @@ def main():
         draw_timestamp_text=timestamp_overlay == "1",
         background_alpha=ortm_background_alpha,
         cell_alpha=ortm_cell_alpha,
+        timing_column_alpha=ortm_timing_column_alpha,
         border_alpha=ortm_border_alpha,
         finder_layout=ortm_finder_layout,
     )
