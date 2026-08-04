@@ -6,6 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY server.mjs ./server.mjs
+COPY media-proxy-location.mjs ./media-proxy-location.mjs
 COPY monitor.mjs ./monitor.mjs
 COPY public ./public
 
