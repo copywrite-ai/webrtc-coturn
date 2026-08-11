@@ -1,0 +1,4 @@
+# Clear, fixed 5G-mid, then dynamically changing 5G conditions.
+../scenarios/02-two-top-timing-0625.env
+../scenarios/03-two-top-5g-mid.env
+../scenarios/04-two-top-random-5g.env

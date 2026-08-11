@@ -2,6 +2,19 @@
 
 一个用于验证 WebRTC 在受限网络下通过 TURN 中继回退的最小示例项目。
 
+## ORTM 自动化实验套件
+
+需要在另一台机器复现 GStreamer 编码、RemoteControl viewer、ORTM 指标和弱网矩阵时，使用版本化的 [`ortm-lab`](ortm-lab/README.zh-CN.md)：
+
+```bash
+./ortm-lab/bin/ortm-lab init
+./ortm-lab/bin/ortm-lab bootstrap
+./ortm-lab/bin/ortm-lab url
+./ortm-lab/bin/ortm-lab run ortm-lab/scenarios/01-two-top-baseline.env
+```
+
+实验场景进入 Git，本机 token、设备名和私有域名保存在被忽略的 `ortm-lab/.env`，原始结果保存在被忽略的 `ortm-lab/results/`。
+
 它适合用于验证以下链路：
 
 - 本地运行的 WebRTC 页面

@@ -6,6 +6,17 @@ Minimal WebRTC publisher/viewer demo for validating TURN relay fallback with:
 - a public `coturn` server
 - mobile access over a tailnet or any other private path to the web page
 
+## Portable ORTM Lab
+
+The versioned [`ortm-lab`](ortm-lab/README.zh-CN.md) packages the GStreamer publisher, RemoteControl viewer, ORTM monitoring, network scenarios, quality gates, and reproducible result manifests for migration to another machine.
+
+```bash
+./ortm-lab/bin/ortm-lab init
+./ortm-lab/bin/ortm-lab bootstrap
+./ortm-lab/bin/ortm-lab url
+./ortm-lab/bin/ortm-lab run ortm-lab/scenarios/01-two-top-baseline.env
+```
+
 The project is intentionally small:
 
 - `server.mjs`: static file server + WebSocket signaling

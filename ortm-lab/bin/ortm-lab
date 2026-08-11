@@ -1,0 +1,639 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LAB_DIR="$(cd "${BIN_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${LAB_DIR}/.." && pwd)"
+LAB_ENV_FILE="${ORTM_LAB_ENV_FILE:-${LAB_DIR}/.env}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ortm-lab init
+  ortm-lab doctor
+  ortm-lab bootstrap
+  ortm-lab up
+  ortm-lab down
+  ortm-lab status
+  ortm-lab url
+  ortm-lab clients
+  ortm-lab run <scenario.env>
+  ortm-lab matrix <matrix.list>
+  ortm-lab summary [result-root]
+
+Workflow:
+  1. bin/ortm-lab init
+  2. Edit ortm-lab/.env, especially DEVICE_ID and LAB_PUBLIC_ORIGIN.
+  3. bin/ortm-lab bootstrap
+  4. Open the URL printed by `bin/ortm-lab url` in a browser.
+  5. bin/ortm-lab run scenarios/01-two-top-baseline.env
+EOF
+}
+
+log() {
+  printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
+
+die() {
+  echo "error: $*" >&2
+  exit 2
+}
+
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+load_lab_env() {
+  [[ -f "$LAB_ENV_FILE" ]] || die "missing ${LAB_ENV_FILE}; run: ${BIN_DIR}/ortm-lab init"
+  set -a
+  # shellcheck disable=SC1090
+  source "$LAB_ENV_FILE"
+  set +a
+
+  COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-tunnel}"
+  DEVICE_ID="${DEVICE_ID:-}"
+  PORT="${PORT:-9001}"
+  MONITOR_PORT="${MONITOR_PORT:-9010}"
+  VIEWER_CONTROL_TOKEN="${VIEWER_CONTROL_TOKEN:-}"
+  LAB_PUBLIC_ORIGIN="${LAB_PUBLIC_ORIGIN:-http://127.0.0.1:${PORT}}"
+  LAB_PUBLIC_ORIGIN="${LAB_PUBLIC_ORIGIN%/}"
+  LAB_WHEP_URL="${LAB_WHEP_URL:-${LAB_PUBLIC_ORIGIN}/fish_front/whep}"
+  VIEWER_CONTROL_API_ORIGIN="${VIEWER_CONTROL_API_ORIGIN:-http://127.0.0.1:${PORT}}"
+  MONITOR_ORIGIN="${MONITOR_ORIGIN:-http://127.0.0.1:${MONITOR_PORT}}"
+  RESULT_ROOT="${RESULT_ROOT:-ortm-lab/results}"
+  if [[ "$RESULT_ROOT" != /* ]]; then
+    RESULT_ROOT="${ROOT_DIR}/${RESULT_ROOT}"
+  fi
+  WHIP_PUBLISHER_BASE_IMAGE="${WHIP_PUBLISHER_BASE_IMAGE:-tunnel-whip-publisher-base:ubuntu24.04-gst-rs-0.14.1}"
+  LAB_ENABLE_OBSERVABILITY="${LAB_ENABLE_OBSERVABILITY:-1}"
+  VIEWER_WAIT_SECONDS="${VIEWER_WAIT_SECONDS:-120}"
+  PUBLISHER_WAIT_SECONDS="${PUBLISHER_WAIT_SECONDS:-45}"
+  FAIL_ON_QUALITY_GATE="${FAIL_ON_QUALITY_GATE:-1}"
+
+  export COMPOSE_PROJECT_NAME DEVICE_ID PORT MONITOR_PORT VIEWER_CONTROL_TOKEN
+  export LAB_PUBLIC_ORIGIN LAB_WHEP_URL VIEWER_CONTROL_API_ORIGIN MONITOR_ORIGIN
+  export RESULT_ROOT WHIP_PUBLISHER_BASE_IMAGE LAB_ENABLE_OBSERVABILITY
+}
+
+core_compose() {
+  (cd "$ROOT_DIR" && docker compose -f docker-compose.yml "$@")
+}
+
+publisher_compose() {
+  (cd "$ROOT_DIR" && docker compose -f docker-compose.whip-publisher.yml "$@")
+}
+
+viewer_url() {
+  printf '%s/whep-quad-direct.html?remoteControl=1\n' "$LAB_PUBLIC_ORIGIN"
+}
+
+api_request() {
+  curl -fsS \
+    -H "Authorization: Bearer ${VIEWER_CONTROL_TOKEN}" \
+    -H 'Content-Type: application/json' \
+    "$@"
+}
+
+monitor_snapshot() {
+  curl -fsS --max-time 5 "${MONITOR_ORIGIN}/api/snapshot"
+}
+
+init_lab() {
+  require_cmd openssl
+  if [[ -e "$LAB_ENV_FILE" ]]; then
+    die "${LAB_ENV_FILE} already exists"
+  fi
+  mkdir -p "$(dirname "$LAB_ENV_FILE")"
+  local token host
+  token="$(openssl rand -hex 24)"
+  host="$(hostname -s 2>/dev/null || hostname)"
+  sed \
+    -e "s/^DEVICE_ID=.*/DEVICE_ID=${host}/" \
+    -e "s/^VIEWER_CONTROL_TOKEN=.*/VIEWER_CONTROL_TOKEN=${token}/" \
+    "${LAB_DIR}/.env.example" > "$LAB_ENV_FILE"
+  chmod 600 "$LAB_ENV_FILE"
+  log "created ${LAB_ENV_FILE}"
+  log "edit LAB_PUBLIC_ORIGIN before using a remote viewer"
+}
+
+doctor() {
+  load_lab_env
+  require_cmd docker
+  require_cmd curl
+  require_cmd jq
+  require_cmd git
+  require_cmd openssl
+  docker compose version >/dev/null
+  docker info >/dev/null
+  [[ -n "$DEVICE_ID" ]] || die "DEVICE_ID is empty in ${LAB_ENV_FILE}"
+  [[ -n "$VIEWER_CONTROL_TOKEN" && "$VIEWER_CONTROL_TOKEN" != "change-me" ]] \
+    || die "VIEWER_CONTROL_TOKEN was not initialized"
+  [[ "$LAB_PUBLIC_ORIGIN" =~ ^https?:// ]] || die "LAB_PUBLIC_ORIGIN must use HTTP(S)"
+  [[ "$LAB_WHEP_URL" =~ ^https?:// ]] || die "LAB_WHEP_URL must use HTTP(S)"
+  [[ -f "${ROOT_DIR}/mediamtx/mediamtx.yml" ]] || die "missing MediaMTX config"
+  [[ -f "${ROOT_DIR}/docker-compose.whip-publisher.yml" ]] || die "missing publisher compose"
+  DEVICE_ID="$DEVICE_ID" core_compose config >/dev/null
+  DEVICE_ID="$DEVICE_ID" publisher_compose config >/dev/null
+  log "doctor passed"
+  log "public origin: ${LAB_PUBLIC_ORIGIN}"
+  log "WHEP URL: ${LAB_WHEP_URL}"
+}
+
+ensure_base_image() {
+  if docker image inspect "$WHIP_PUBLISHER_BASE_IMAGE" >/dev/null 2>&1; then
+    log "publisher base image present: ${WHIP_PUBLISHER_BASE_IMAGE}"
+    return
+  fi
+  log "publisher base image missing; first build can take a long time"
+  publisher_compose --profile build build whip_publisher_base
+}
+
+up() {
+  load_lab_env
+  mkdir -p "${ROOT_DIR}/logs" "$RESULT_ROOT"
+  local services=(mediamtx webrtc-relay-demo monitor)
+  if [[ "$LAB_ENABLE_OBSERVABILITY" == "1" ]]; then
+    services+=(prometheus grafana)
+  fi
+  core_compose up -d --build "${services[@]}"
+  log "viewer: $(viewer_url)"
+  log "monitor: ${MONITOR_ORIGIN}/"
+  if [[ "$LAB_ENABLE_OBSERVABILITY" == "1" ]]; then
+    log "Prometheus: http://127.0.0.1:${PROMETHEUS_PORT:-9090}"
+    log "Grafana: http://127.0.0.1:${GRAFANA_PORT:-3000}"
+  fi
+}
+
+bootstrap() {
+  doctor
+  ensure_base_image
+  up
+}
+
+down() {
+  load_lab_env
+  scripts_clear_netem || true
+  publisher_compose stop fish_front_whip >/dev/null 2>&1 || true
+  core_compose down
+}
+
+status() {
+  load_lab_env
+  core_compose ps
+  publisher_compose ps fish_front_whip || true
+  if curl -fsS --max-time 3 "${VIEWER_CONTROL_API_ORIGIN}/whep-quad-direct.html" >/dev/null 2>&1; then
+    echo "viewer_http=ok"
+  else
+    echo "viewer_http=down"
+  fi
+  if monitor_snapshot >/dev/null 2>&1; then
+    echo "monitor_http=ok"
+  else
+    echo "monitor_http=down"
+  fi
+}
+
+clients() {
+  load_lab_env
+  api_request "${VIEWER_CONTROL_API_ORIGIN}/api/viewer-control/clients" | jq .
+}
+
+discover_peer() {
+  local deadline=$(( $(date +%s) + VIEWER_WAIT_SECONDS ))
+  local response count explicit="${VIEWER_CONTROL_PEER_ID:-}"
+  while [[ "$(date +%s)" -lt "$deadline" ]]; do
+    response="$(api_request "${VIEWER_CONTROL_API_ORIGIN}/api/viewer-control/clients" 2>/dev/null || true)"
+    if [[ -n "$response" ]]; then
+      if [[ -n "$explicit" ]]; then
+        if jq -e --arg id "$explicit" '.clients[]? | select(.peerId == $id)' <<<"$response" >/dev/null; then
+          printf '%s\n' "$explicit"
+          return
+        fi
+      else
+        count="$(jq '[.clients[]?] | length' <<<"$response")"
+        if [[ "$count" == "1" ]]; then
+          jq -r '.clients[0].peerId' <<<"$response"
+          return
+        fi
+        if [[ "$count" -gt 1 ]]; then
+          die "multiple RemoteControl viewers registered; set VIEWER_CONTROL_PEER_ID"
+        fi
+      fi
+    fi
+    sleep 2
+  done
+  die "no RemoteControl viewer registered; open $(viewer_url)"
+}
+
+configure_viewer() {
+  local peer_id="$1" whep_url="$2" ortm_profile="$3"
+  local payload response request_id deadline result
+  payload="$(jq -cn \
+    --arg peerId "$peer_id" \
+    --arg whepUrl "$whep_url" \
+    --arg ortmProfile "$ortm_profile" \
+    '{peerId: $peerId, command: {type: "configure-and-play", slot: 0, whepUrl: $whepUrl, ortmProfile: $ortmProfile}}')"
+  response="$(api_request -X POST --data "$payload" "${VIEWER_CONTROL_API_ORIGIN}/api/viewer-control/command")"
+  request_id="$(jq -r '.requestId // empty' <<<"$response")"
+  [[ -n "$request_id" && "$(jq -r '.delivered' <<<"$response")" -gt 0 ]] \
+    || die "viewer command was not delivered: ${response}"
+
+  deadline=$(( $(date +%s) + 30 ))
+  while [[ "$(date +%s)" -lt "$deadline" ]]; do
+    result="$(api_request "${VIEWER_CONTROL_API_ORIGIN}/api/viewer-control/clients")"
+    if jq -e --arg peer "$peer_id" --arg request "$request_id" \
+      '.clients[]? | select(.peerId == $peer and .lastResult.requestId == $request)' \
+      <<<"$result" >/dev/null; then
+      if jq -e --arg peer "$peer_id" --arg request "$request_id" \
+        '.clients[] | select(.peerId == $peer and .lastResult.requestId == $request) | .lastResult.ok == true' \
+        <<<"$result" >/dev/null; then
+        log "viewer accepted request=${request_id} peer=${peer_id}"
+        return
+      fi
+      jq -r --arg peer "$peer_id" '.clients[] | select(.peerId == $peer) | .lastResult' <<<"$result" >&2
+      die "viewer rejected request=${request_id}"
+    fi
+    sleep 1
+  done
+  die "viewer did not acknowledge request=${request_id}"
+}
+
+scripts_clear_netem() {
+  (cd "$ROOT_DIR" && scripts/netem-fish-front.sh clear >/dev/null)
+}
+
+write_manifest() {
+  local output="$1" scenario_path="$2" scenario_name="$3"
+  local git_rev git_dirty ortm_rev system docker_version scenario_hash
+  git_rev="$(git -C "$ROOT_DIR" rev-parse HEAD)"
+  if ! git -C "$ROOT_DIR" diff --quiet -- || ! git -C "$ROOT_DIR" diff --cached --quiet --; then
+    git_dirty=true
+  else
+    git_dirty=false
+  fi
+  ortm_rev="$(cat "${ROOT_DIR}/vendor/open-raster-timing-marker/SOURCE_COMMIT" 2>/dev/null || echo unknown)"
+  system="$(uname -a)"
+  docker_version="$(docker version --format '{{.Client.Version}}' 2>/dev/null || echo unknown)"
+  scenario_hash="$(git -C "$ROOT_DIR" hash-object "$scenario_path")"
+  jq -n \
+    --arg createdAt "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+    --arg scenario "$scenario_name" \
+    --arg scenarioFile "$(basename "$scenario_path")" \
+    --arg scenarioHash "$scenario_hash" \
+    --arg gitRevision "$git_rev" \
+    --argjson gitDirty "$git_dirty" \
+    --arg ortmRevision "$ortm_rev" \
+    --arg system "$system" \
+    --arg dockerVersion "$docker_version" \
+    --arg publicOrigin "$LAB_PUBLIC_ORIGIN" \
+    --arg whepUrl "$LAB_WHEP_URL" \
+    --arg deviceId "$DEVICE_ID" \
+    --arg resolution "${WIDTH}x${HEIGHT}" \
+    --argjson fps "$FPS" \
+    --argjson bitrateKbps "$BITRATE_KBPS" \
+    --argjson keyInt "$KEY_INT_MAX" \
+    --arg ortmProfile "$ORTM_PROFILE" \
+    --arg finderLayout "$ORTM_FINDER_LAYOUT" \
+    --argjson cellAlpha "$ORTM_CELL_ALPHA" \
+    --argjson timingColumnAlpha "$ORTM_TIMING_COLUMN_ALPHA" \
+    --arg networkProfile "${NETWORK_PROFILE:-}" \
+    --arg networkSequence "${NETWORK_SEQUENCE:-}" \
+    --arg publisherBaseImage "$WHIP_PUBLISHER_BASE_IMAGE" \
+    '{
+      schemaVersion: 1,
+      createdAt: $createdAt,
+      scenario: $scenario,
+      scenarioFile: $scenarioFile,
+      scenarioHash: $scenarioHash,
+      revisions: {tunnel: $gitRevision, ortm: $ortmRevision, trackedWorkingTreeDirty: $gitDirty},
+      host: {system: $system, dockerVersion: $dockerVersion, deviceId: $deviceId},
+      images: {publisherBase: $publisherBaseImage},
+      endpoints: {publicOrigin: $publicOrigin, whepUrl: $whepUrl},
+      video: {resolution: $resolution, fps: $fps, bitrateKbps: $bitrateKbps, keyInt: $keyInt},
+      marker: {
+        profile: $ortmProfile,
+        finderLayout: $finderLayout,
+        cellAlpha: $cellAlpha,
+        timingColumnAlpha: $timingColumnAlpha
+      },
+      network: {profile: $networkProfile, sequence: $networkSequence}
+    }' > "$output"
+}
+
+render_summary() {
+  local snapshots="$1" output="$2"
+  jq -s \
+    --arg scenario "$SCENARIO_NAME" \
+    --arg resolution "${WIDTH}x${HEIGHT}" \
+    --argjson minDecode "$MIN_DECODE_SUCCESS_RATE" \
+    --argjson maxCrc "$MAX_CRC_FAILURES" \
+    --argjson maxStructure "$MAX_STRUCTURE_FAILURES" \
+    --argjson maxLowContrast "$MAX_LOW_CONTRAST_FAILURES" '
+      def stat($xs):
+        if ($xs | length) == 0 then null
+        else ($xs | sort) as $s
+        | ($s | length) as $n
+        | {
+            count: $n,
+            min: $s[0],
+            max: $s[-1],
+            avg: (($s | add) / $n),
+            p95: $s[((($n * 0.95) | ceil) - 1)]
+          }
+        end;
+      map(select(.data.viewerSampleValid == true)) as $valid
+      | ($valid[-1].data // {}) as $last
+      | ($last.viewer // {}) as $viewer
+      | {
+          schemaVersion: 1,
+          scenario: $scenario,
+          expectedResolution: $resolution,
+          totalSamples: length,
+          validSamples: ($valid | length),
+          metrics: {
+            ortmMs: stat([$valid[].data.viewer.ortm | select(type == "number")]),
+            ortmNetMs: stat([$valid[].data.viewer.ortmNet | select(type == "number")]),
+            upstreamMs: stat([$valid[].data.viewer.upstream | select(type == "number")]),
+            browserMs: stat([$valid[].data.viewer.browser | select(type == "number")]),
+            rtcFps: stat([$valid[].data.viewer.rtcFps | select(type == "number")]),
+            rtcBitrateKbps: stat([$valid[].data.viewer.rtcBitrate | select(type == "number")]),
+            rtcJitterMs: stat([$valid[].data.viewer.rtcJitter | select(type == "number")])
+          },
+          final: {
+            status: $viewer.status,
+            ice: $viewer.ice,
+            resolution: $viewer.resolution,
+            decodeSuccessRate: $viewer.ortmDecodeSuccessRate,
+            decodeAttempts: $viewer.ortmDecodeAttempts,
+            decodeFailures: $viewer.ortmDecodeFailures,
+            crcFailures: ($viewer.ortmCrcFailures // 0),
+            structureFailures: ($viewer.ortmStructureFailures // 0),
+            lowContrastFailures: ($viewer.ortmLowContrastFailures // 0),
+            freezeCount: ($viewer.rtcFreezeCount // 0),
+            droppedFrames: ($viewer.rtcDrop // 0),
+            packetsLost: ($viewer.rtcPacketsLost // 0)
+          },
+          thresholds: {
+            minDecodeSuccessRate: $minDecode,
+            maxCrcFailures: $maxCrc,
+            maxStructureFailures: $maxStructure,
+            maxLowContrastFailures: $maxLowContrast
+          }
+        }
+      | .quality.checks = {
+          hasValidSamples: (.validSamples > 0),
+          viewerPlaying: (.final.status == "playing"),
+          iceConnected: (.final.ice == "connected" or .final.ice == "completed"),
+          resolutionMatches: (.final.resolution == $resolution),
+          decodeSuccessRate: ((.final.decodeSuccessRate // -1) >= $minDecode),
+          crcFailures: (.final.crcFailures <= $maxCrc),
+          structureFailures: (.final.structureFailures <= $maxStructure),
+          lowContrastFailures: (.final.lowContrastFailures <= $maxLowContrast)
+        }
+      | .quality.passed = ([.quality.checks[]] | all)
+    ' "$snapshots" > "$output"
+}
+
+run_scenario() {
+  load_lab_env
+  local scenario_path="${1:-}"
+  [[ -n "$scenario_path" ]] || die "run requires a scenario.env"
+  if [[ "$scenario_path" != /* ]]; then
+    scenario_path="$(cd "$(dirname "$scenario_path")" && pwd)/$(basename "$scenario_path")"
+  fi
+  [[ -f "$scenario_path" ]] || die "scenario not found: ${scenario_path}"
+
+  set -a
+  # shellcheck disable=SC1090
+  source "$scenario_path"
+  set +a
+
+  SCENARIO_NAME="${SCENARIO_NAME:-$(basename "$scenario_path" .env)}"
+  WIDTH="${WIDTH:-1280}"
+  HEIGHT="${HEIGHT:-720}"
+  FPS="${FPS:-60}"
+  BITRATE_KBPS="${BITRATE_KBPS:-2500}"
+  KEY_INT_MAX="${KEY_INT_MAX:-120}"
+  VIDEO_SOURCE="${VIDEO_SOURCE:-testsrc}"
+  PATTERN="${PATTERN:-checkers-8}"
+  TESTSRC_HORIZONTAL_SPEED="${TESTSRC_HORIZONTAL_SPEED:-2}"
+  SPEED_PRESET="${SPEED_PRESET:-ultrafast}"
+  ORTM_PROFILE="${ORTM_PROFILE:-720p-two-top}"
+  ORTM_X="${ORTM_X:-32}"
+  ORTM_Y="${ORTM_Y:-32}"
+  ORTM_CELL="${ORTM_CELL:-8}"
+  ORTM_PADDING="${ORTM_PADDING:-16}"
+  ORTM_BACKGROUND_ALPHA="${ORTM_BACKGROUND_ALPHA:-0}"
+  ORTM_CELL_ALPHA="${ORTM_CELL_ALPHA:-0.70}"
+  ORTM_TIMING_COLUMN_ALPHA="${ORTM_TIMING_COLUMN_ALPHA:-${ORTM_CELL_ALPHA}}"
+  ORTM_BORDER_ALPHA="${ORTM_BORDER_ALPHA:-0}"
+  ORTM_FINDER_LAYOUT="${ORTM_FINDER_LAYOUT:-two-top}"
+  NETWORK_PROFILE="${NETWORK_PROFILE:-clear}"
+  NETWORK_SEQUENCE="${NETWORK_SEQUENCE:-}"
+  RANDOM_STEP_SECONDS="${RANDOM_STEP_SECONDS:-5}"
+  WARMUP_SECONDS="${WARMUP_SECONDS:-8}"
+  SAMPLE_SECONDS="${SAMPLE_SECONDS:-90}"
+  SNAPSHOT_INTERVAL_SECONDS="${SNAPSHOT_INTERVAL_SECONDS:-5}"
+  MIN_DECODE_SUCCESS_RATE="${MIN_DECODE_SUCCESS_RATE:-99.0}"
+  MAX_CRC_FAILURES="${MAX_CRC_FAILURES:-10}"
+  MAX_STRUCTURE_FAILURES="${MAX_STRUCTURE_FAILURES:-2}"
+  MAX_LOW_CONTRAST_FAILURES="${MAX_LOW_CONTRAST_FAILURES:-0}"
+  WHIP_BASE_URL="${WHIP_BASE_URL:-http://mediamtx:8889}"
+  WHIP_INCLUDE_DEVICE="${WHIP_INCLUDE_DEVICE:-0}"
+
+  export WIDTH HEIGHT FPS BITRATE_KBPS KEY_INT_MAX VIDEO_SOURCE PATTERN
+  export TESTSRC_HORIZONTAL_SPEED SPEED_PRESET ORTM_X ORTM_Y ORTM_CELL ORTM_PADDING
+  export ORTM_BACKGROUND_ALPHA ORTM_CELL_ALPHA ORTM_TIMING_COLUMN_ALPHA
+  export ORTM_BORDER_ALPHA ORTM_FINDER_LAYOUT WHIP_BASE_URL WHIP_INCLUDE_DEVICE
+
+  [[ -n "$DEVICE_ID" ]] || die "DEVICE_ID is empty"
+  [[ -n "$VIEWER_CONTROL_TOKEN" ]] || die "VIEWER_CONTROL_TOKEN is empty"
+  [[ -z "$NETWORK_PROFILE" || -z "$NETWORK_SEQUENCE" ]] \
+    || die "NETWORK_PROFILE and NETWORK_SEQUENCE are mutually exclusive"
+
+  local stamp run_started_at run_dir snapshots summary publisher_log peer_id
+  stamp="$(date '+%Y%m%d-%H%M%S')"
+  run_started_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  run_dir="${RESULT_ROOT}/${stamp}-${SCENARIO_NAME}"
+  snapshots="${run_dir}/snapshots.jsonl"
+  summary="${run_dir}/summary.json"
+  publisher_log="${run_dir}/publisher.log"
+  mkdir -p "$run_dir"
+  cp "$scenario_path" "${run_dir}/scenario.env"
+  write_manifest "${run_dir}/manifest.json" "$scenario_path" "$SCENARIO_NAME"
+
+  local sequence_pid=""
+  cleanup_run() {
+    if [[ -n "$sequence_pid" ]]; then
+      kill "$sequence_pid" >/dev/null 2>&1 || true
+      wait "$sequence_pid" >/dev/null 2>&1 || true
+    fi
+    scripts_clear_netem >/dev/null 2>&1 || true
+  }
+  trap cleanup_run EXIT INT TERM
+
+  up
+  ensure_base_image
+  log "starting publisher scenario=${SCENARIO_NAME}"
+  publisher_compose up -d --build --no-deps --force-recreate fish_front_whip
+
+  local publisher_deadline=$(( $(date +%s) + PUBLISHER_WAIT_SECONDS ))
+  while [[ "$(date +%s)" -lt "$publisher_deadline" ]]; do
+    if docker logs --since 2m tunnel-fish_front_whip-1 2>&1 | grep -q 'sink args'; then
+      break
+    fi
+    sleep 2
+  done
+  docker logs --since 3m tunnel-fish_front_whip-1 > "$publisher_log" 2>&1 || true
+  grep -E 'Starting WHIP publisher|resolution|fps|bitrate|ortm|sink args|ERROR|WARN' "$publisher_log" || true
+
+  if [[ -n "$NETWORK_PROFILE" ]]; then
+    log "applying network profile=${NETWORK_PROFILE}"
+    (cd "$ROOT_DIR" && scripts/netem-fish-front.sh "$NETWORK_PROFILE")
+  fi
+
+  log "waiting for RemoteControl viewer; open $(viewer_url)"
+  peer_id="$(discover_peer)"
+  configure_viewer "$peer_id" "$LAB_WHEP_URL" "$ORTM_PROFILE"
+
+  log "waiting for current viewer and publisher metrics"
+  local ready_deadline=$(( $(date +%s) + VIEWER_WAIT_SECONDS )) ready=0
+  while [[ "$(date +%s)" -lt "$ready_deadline" ]]; do
+    if monitor_snapshot | jq -e \
+      --arg resolution "${WIDTH}x${HEIGHT}" \
+      --argjson width "$WIDTH" \
+      --argjson height "$HEIGHT" \
+      --argjson fps "$FPS" \
+      --argjson bitrate "$BITRATE_KBPS" '
+        .derived.streams.fish_front as $s
+        | ($s.readers // 0) > 0
+        and ($s.viewer.status == "playing")
+        and ($s.viewer.ice == "connected" or $s.viewer.ice == "completed")
+        and ($s.viewer.resolution == $resolution)
+        and (($s.viewer.ortmSampleAge // 999999) < 2000)
+        and ($s.publisher.width == $width)
+        and ($s.publisher.height == $height)
+        and ($s.publisher.fps == $fps)
+        and ($s.publisher.targetBitrateKbps == $bitrate)
+      ' >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 2
+  done
+  [[ "$ready" == "1" ]] || die "viewer/publisher did not become ready for current scenario"
+
+  if [[ "$WARMUP_SECONDS" -gt 0 ]]; then
+    log "warmup=${WARMUP_SECONDS}s"
+    sleep "$WARMUP_SECONDS"
+  fi
+
+  if [[ -n "$NETWORK_SEQUENCE" ]]; then
+    log "starting network sequence=${NETWORK_SEQUENCE}"
+    (cd "$ROOT_DIR" && KEEP_LAST=0 RANDOM_STEP_SECONDS="$RANDOM_STEP_SECONDS" \
+      scripts/netem-fish-front-sequence.sh "$NETWORK_SEQUENCE") &
+    sequence_pid="$!"
+  fi
+
+  log "sampling duration=${SAMPLE_SECONDS}s interval=${SNAPSHOT_INTERVAL_SECONDS}s"
+  local end_ts=$(( $(date +%s) + SAMPLE_SECONDS )) snapshot
+  while [[ "$(date +%s)" -lt "$end_ts" ]]; do
+    snapshot="$(monitor_snapshot | jq -c '{
+      ts: .updatedAt,
+      data: (
+        .derived.streams.fish_front
+        + {viewerSampleValid: (
+          ((.derived.streams.fish_front.readers // 0) > 0)
+          and (.derived.streams.fish_front.viewer.status == "playing")
+          and (.derived.streams.fish_front.viewer.ice == "connected" or .derived.streams.fish_front.viewer.ice == "completed")
+        )}
+      )
+    }')"
+    printf '%s\n' "$snapshot" >> "$snapshots"
+    printf '.'
+    sleep "$SNAPSHOT_INTERVAL_SECONDS"
+  done
+  printf '\n'
+
+  render_summary "$snapshots" "$summary"
+  docker logs --since "$run_started_at" tunnel-fish_front_whip-1 > "$publisher_log" 2>&1 || true
+  jq '{scenario, totalSamples, validSamples, metrics, final, thresholds, quality}' "$summary"
+  log "result=${run_dir}"
+
+  local passed
+  passed="$(jq -r '.quality.passed' "$summary")"
+  trap - EXIT INT TERM
+  cleanup_run
+  if [[ "$passed" != "true" && "$FAIL_ON_QUALITY_GATE" == "1" ]]; then
+    return 1
+  fi
+}
+
+run_matrix() {
+  load_lab_env
+  local matrix_path="${1:-}"
+  [[ -n "$matrix_path" && -f "$matrix_path" ]] || die "matrix requires an existing .list file"
+  local matrix_dir line scenario failures=0
+  matrix_dir="$(cd "$(dirname "$matrix_path")" && pwd)"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"
+    line="$(printf '%s' "$line" | tr -d '[:space:]')"
+    [[ -n "$line" ]] || continue
+    if [[ "$line" == /* ]]; then
+      scenario="$line"
+    else
+      scenario="${matrix_dir}/${line}"
+    fi
+    log "matrix scenario=${scenario}"
+    if ! "$0" run "$scenario"; then
+      failures=$((failures + 1))
+      log "matrix scenario failed quality gate: ${scenario}"
+    fi
+  done < "$matrix_path"
+  "$0" summary "$RESULT_ROOT"
+  [[ "$failures" == "0" ]] || return 1
+}
+
+summarize_results() {
+  load_lab_env
+  local root="${1:-$RESULT_ROOT}"
+  [[ -d "$root" ]] || die "result root not found: ${root}"
+  printf 'scenario\tvalid/total\tdecode%%\tcrc\tstructure\tfreeze\tortm-p95\tpassed\tpath\n'
+  local file
+  while IFS= read -r file; do
+    jq -r --arg path "$(dirname "$file")" '[
+      .scenario,
+      "\(.validSamples)/\(.totalSamples)",
+      (.final.decodeSuccessRate // "--"),
+      .final.crcFailures,
+      .final.structureFailures,
+      .final.freezeCount,
+      (.metrics.ortmMs.p95 // "--"),
+      .quality.passed,
+      $path
+    ] | @tsv' "$file"
+  done < <(find "$root" -name summary.json -type f | sort)
+}
+
+main() {
+  local command="${1:-}"
+  case "$command" in
+    init) init_lab ;;
+    doctor) doctor ;;
+    bootstrap) bootstrap ;;
+    up) load_lab_env; up ;;
+    down) down ;;
+    status) status ;;
+    url) load_lab_env; viewer_url ;;
+    clients) clients ;;
+    run) shift; run_scenario "${1:-}" ;;
+    matrix) shift; run_matrix "${1:-}" ;;
+    summary) shift; summarize_results "${1:-}" ;;
+    -h|--help|help|'') usage ;;
+    *) die "unknown command: ${command}" ;;
+  esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
