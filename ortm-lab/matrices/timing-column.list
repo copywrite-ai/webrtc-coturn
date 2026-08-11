@@ -1,3 +1,0 @@
-# Scenario paths are relative to this matrix file.
-../scenarios/01-two-top-baseline.env
-../scenarios/02-two-top-timing-0625.env
